@@ -4,20 +4,20 @@ function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, p
 
     Icoords = round.(rand(params.rng, Uniform(coords_bounds[1], coords_bounds[2]), 2, nI),
         digits=params.round_digits)
-    Jcoords = round.(rand(params.rng+5, Uniform(coords_bounds[1], coords_bounds[2]), 2, nJ),
+    Jcoords = round.(rand(params.rng2, Uniform(coords_bounds[1], coords_bounds[2]), 2, nJ),
         digits=params.round_digits)
     dist = round.(pairwise(euclidean,Icoords, Jcoords), digits=params.round_digits)
     λ = round(rand(params.rng, Uniform(λ_bounds[1], λ_bounds[2])),
         digits=params.round_digits)
     r = round.(rand(params.rng, Uniform(r_bounds[1], r_bounds[2]), nI, nJ, t),
     digits=params.round_digits)
-    C = r .* dist
+    C = round.(r .* dist, digits=params.round_digits)
 
     write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
 end
 
 function write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
-    fname = "I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t lam_$λ_bounds r $r_bounds.txt"
+    fname = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t lam_$λ_bounds r $r_bounds.txt"
     open(fname, "w") do f
         write(f, "I $nI\n")
         write(f, "J $nJ\n")
@@ -45,11 +45,12 @@ function write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds,
         write(f, "\nC\n")
         for t in 1:size(C,3)
             Ct = C[:,:,t]
-            for j in 1:size(Ct, 2)
-                coords = Ct[:,j]
-                x = coords[1]
-                y = coords[2]
-                write(f, "$x $y\n")
+            for j in 1:size(Ct, 1)
+                coords = Ct[j,:]
+                for x in coords
+                    write(f, "$x ")
+                end
+                write(f, "\n")
             end
             write(f, "\n")
         end 

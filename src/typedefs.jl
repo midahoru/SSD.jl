@@ -3,13 +3,14 @@ mutable struct Parameters
     ϵ::Float64
     round_digits::Int64
     rng::MersenneTwister
+    rng2::MersenneTwister
 end
 
 mutable struct Data
     name::String
     Icoords::Matrix{Float64}
     Jcoords::Matrix{Float64}    
-    dist::Matrix{Float}
+    dist::Matrix{Float64}
     λ::Vector{Float64}
     C::Matrix{Float64}
     cv::Float64
@@ -31,5 +32,5 @@ mutable struct SolverStatus
     endStatus::Symbol
 end
 
-default_params() = Parameters(30*60, 10^-5, 4, MersenneTwister(0))
+default_params() = Parameters(30*60, 10^-5, 4, MersenneTwister(0), MersenneTwister(15))
 init_solver_status() = SolverStatus(Dates.now(), Dates.now(), true, :none)
