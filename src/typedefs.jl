@@ -7,12 +7,13 @@ mutable struct Parameters
 end
 
 mutable struct Data
-    name::String
+    I::Int64
+    J::Int64
     Icoords::Matrix{Float64}
     Jcoords::Matrix{Float64}    
     dist::Matrix{Float64}
-    λ::Vector{Float64}
-    C::Matrix{Float64}
+    λ::Matrix{Float64}
+    C::Array{Float64}
     cv::Float64
     D::Int64    
     k::Int64
@@ -33,4 +34,6 @@ mutable struct SolverStatus
 end
 
 default_params() = Parameters(30*60, 10^-5, 4, MersenneTwister(0), MersenneTwister(15))
+default_data() = Data(0, 0, Array{Float64,}(undef,0,0), Array{Float64}(undef,0,0), Array{Float64}(undef,0, 0),
+Array{Float64}(undef,0, 0), Array{Float64}(undef,0,0,0), 1, 1, 1, 1)
 init_solver_status() = SolverStatus(Dates.now(), Dates.now(), true, :none)

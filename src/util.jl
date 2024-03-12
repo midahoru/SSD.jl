@@ -7,7 +7,7 @@ function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, p
     Jcoords = round.(rand(params.rng2, Uniform(coords_bounds[1], coords_bounds[2]), 2, nJ),
         digits=params.round_digits)
     dist = round.(pairwise(euclidean,Icoords, Jcoords), digits=params.round_digits)
-    λ = round(rand(params.rng, Uniform(λ_bounds[1], λ_bounds[2])),
+    λ = round.(rand(params.rng, Uniform(λ_bounds[1], λ_bounds[2]), nI, t),
         digits=params.round_digits)
     r = round.(rand(params.rng, Uniform(r_bounds[1], r_bounds[2]), nI, nJ, t),
     digits=params.round_digits)
@@ -17,8 +17,8 @@ function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, p
 end
 
 function write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
-    fname = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t lam_$λ_bounds r_$r_bounds.txt"
-    open(fname, "w") do f
+    filename = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t lam_$λ_bounds r_$r_bounds.txt"
+    open(filename, "w") do f
         write(f, "I $nI\n")
         write(f, "J $nJ\n")
         write(f, "bounds $coords_bounds\n")
@@ -26,72 +26,120 @@ function write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds,
         write(f, "D $D\n")
         write(f, "k $k\n")
         write(f, "t $t\n")
-        write(f, "λ $λ\n")
-        write(f, "λ bounds $λ_bounds\n\n")
-        write(f, "Icoords\n")
+        write(f, "λbounds $λ_bounds\n\n")        
+        write(f, "λ \n")
         for i in 1:size(Icoords,2)
+            lams = λ[i,:]
+            for l in lams
+                write(f, "$l ")
+            end
+            write(f,"\n")
+        end
+        write(f,"\n")
+        write(f, "Icoords\n")
+        for i in 1:nI
             coords = Icoords[:,i]
             x = coords[1]
             y = coords[2]
             write(f, "$x $y\n")
         end
-        write(f, "\nJcoords\n")
-        for j in 1:size(Jcoords,2)
+        write(f,"\n")
+        write(f, "Jcoords\n")
+        for j in 1:nJ
             coords = Jcoords[:,j]
             x = coords[1]
             y = coords[2]
             write(f, "$x $y\n")
-        end      
-        write(f, "\nC\n")
-        for t in 1:size(C,3)
+        end 
+        write(f,"\n")     
+        write(f, "C\n")
+        for t in 1:t
             Ct = C[:,:,t]
-            for j in 1:size(Ct, 1)
-                coords = Ct[j,:]
-                for x in coords
-                    write(f, "$x ")
+            for i in 1:nI
+                coords = Ct[i,:]
+                for j in coords
+                    write(f, "$j ")
                 end
                 write(f, "\n")
             end
-            write(f, "\n")
         end 
-        write(f, "end")
+        write(f, "EOF")
     end
+    println("\ninstance file $filename saved successfully\n")
 end
 
-function read_file(filename)    
-    start_coords = false
-    open("instances/"+filename) do f
-        lines = readlines(f)
-        for line in lines
+function read_file(filename, data)    
+    open("instances/$filename","r") do f
+        λ_ = false
+        i_coords = false
+        j_coords = false
+        c_ = false
+        ini_count = 1      
+        t_count = 1        
+        
+        while !eof(f)         
+            line = readline(f)
             sline = split(line)
-            if sline[1] == "EOF"
+            if line == "EOF"
                 break
-            elseif start_coords
-                p = parse(Int64, sline[1])
-                x = parse(Float64, sline[2])
-                y = parse(Float64, sline[3])
-                data.D[1, p] = x
-                data.D[2, p] = y
-            elseif sline[1] == "NAME"
-                data.name = sline[3]
-            elseif sline[1] == "DIMENSION"
-                data.nnodes = parse(Int64, sline[3])
-                data.D = zeros(Float64, 2, data.nnodes)
-            elseif sline[1] == "EDGE_WEIGHT_TYPE"
-                if sline[3] == "EUC_2D"
-                    params.wtype = :round
-                elseif sline[3] == "CEIL_2D"
-                    params.wtype = :ceil
-                elseif sline[3] == "GEOM"
-                    params.wtype = :geom
+            elseif line != ""
+                if λ_
+                    row = map(t -> parse(Float64, t), sline)
+                    data.λ[ini_count,:] = row
+                    ini_count += 1
+                elseif i_coords
+                    col = map(t -> parse(Float64, t), sline)
+                    data.Icoords[:, ini_count] = col
+                    ini_count += 1
+                elseif j_coords
+                    col = map(t -> parse(Float64, t), sline)
+                    data.Jcoords[:, ini_count] = col
+                    ini_count += 1
+                elseif c_
+                    row = map(t -> parse(Float64, t), sline)
+                    data.C[ini_count, :, t_count] = row
+                    if ini_count == data.I
+                        ini_count = 0
+                        t_count+=1
+                    end                
+                    ini_count+=1                
+                elseif sline[1] == "I"
+                    data.I = parse(Int64, sline[2])
+                elseif sline[1] == "J"
+                    data.J = parse(Int64, sline[2])
+                elseif sline[1] == "cv"
+                    data.cv = parse(Float64, sline[2])
+                elseif sline[1] == "D"
+                    data.D = parse(Float64, sline[2])
+                elseif sline[1] == "k"
+                    data.k = parse(Int64, sline[2])
+                elseif sline[1] == "t"
+                    data.t = parse(Int64, sline[2])
+                    data.λ = Array{Float64}(undef, data.I, data.t)
+                    data.Icoords = Matrix{Float64}(undef, 2, data.I)
+                    data.Jcoords = Matrix{Float64}(undef, 2, data.J)
+                    data.C = Array{Float64}(undef, data.I, data.J, data.t)
+                elseif sline[1] == "λ"
+                    λ_ = true
+                elseif sline[1] == "Icoords"
+                    i_coords = true
+                    ini_count = 1
+                elseif sline[1] == "Jcoords"
+                    j_coords = true
+                    ini_count = 1
+                elseif sline[1] == "C"
+                    c_ = true
+                    ini_count = 1
                 end
-            elseif sline[1] == "NODE_COORD_SECTION"
-                start_coords = true
+            elseif line == ""
+                λ_ = false
+                i_coords = false
+                j_coords = false
+                c_ = false            
             end
         end
     end
-    println("instance file $filename parsed successfully")
-
+    println("\ninstance file $filename parsed successfully\n")
 end
 
     
