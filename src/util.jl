@@ -161,8 +161,8 @@ function gen_costs(data, params, cost_levels)
     return round.(F_j3 .* cost_levels', digits=params.round_digits)
 end
 
-function gen_caps(data, params, cap_levels, a)
-    tot_dem = sum(a[i,t] for i in 1:data.I for t in 1:data.t)
+function gen_caps(data, params, cap_levels)
+    tot_dem = sum(data.a[i,t] for i in 1:data.I for t in 1:data.t)
     Q_j3 = zeros(Float64, data.J)
     for j in 1:data.J
         Q_j3[j] = 1.25*tot_dem / (data.J * data.FLR)
