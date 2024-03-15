@@ -1,6 +1,6 @@
 ################################################## Instances
 
-function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, params)
+function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, FLR, FCR, params)
 
     Icoords = round.(rand(params.rng, Uniform(coords_bounds[1], coords_bounds[2]), 2, nI),
         digits=params.round_digits)
@@ -11,12 +11,13 @@ function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, p
         digits=params.round_digits)
     r = round.(rand(params.rng, Uniform(r_bounds[1], r_bounds[2]), nI, nJ, t),
     digits=params.round_digits)
-    C = round.(r .* dist, digits=params.round_digits)
+    C = round.(r .* dist, digits=params.round_digits)   
 
-    write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
+    write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
 end
 
-function write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
+function write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, λ, λ_bounds, r_bounds,
+     Icoords, Jcoords, C)
     filename = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t lam_$λ_bounds r_$r_bounds.txt"
     open(filename, "w") do f
         write(f, "I $nI\n")
@@ -26,6 +27,8 @@ function write_file(nI, nJ, coords_bounds, cv, D, k, t, λ, λ_bounds, r_bounds,
         write(f, "D $D\n")
         write(f, "k $k\n")
         write(f, "t $t\n")
+        write(f, "FLR $FLR\n")
+        write(f, "FCR $FCR\n")
         write(f, "λbounds $λ_bounds\n\n")        
         write(f, "λ \n")
         for i in 1:size(Icoords,2)
@@ -119,6 +122,10 @@ function read_file(filename, data)
                     data.Icoords = Matrix{Float64}(undef, 2, data.I)
                     data.Jcoords = Matrix{Float64}(undef, 2, data.J)
                     data.C = Array{Float64}(undef, data.I, data.J, data.t)
+                elseif sline[1] == "FLR"
+                    data.FLR = parse(Float64, sline[2])
+                elseif sline[1] == "FCR"
+                    data.FCR = parse(Float64, sline[2])
                 elseif sline[1] == "λ"
                     λ_ = true
                 elseif sline[1] == "Icoords"
@@ -143,7 +150,25 @@ function read_file(filename, data)
 end
 
     
-################################################## initialClustering
+################################################## Model
+
+function gen_costs(data, params, cost_levels)
+    f = (x,y) -> euclidean((x,y), (maximum(data.coords_bounds), maximum(data.coords_bounds))./2)
+    F_j3 = zeros(Float64, data.J)
+    for j in 1:data.J
+        F_j3[j] = data.FCR*f(data.Jcoords[1,j], data.Jcoords[2,j])
+    end
+    return round.(F_j3 .* cost_levels', digits=params.round_digits)
+end
+
+function gen_caps(data, params, cap_levels, a)
+    tot_dem = sum(a[i,t] for i in 1:data.I for t in 1:data.t)
+    Q_j3 = zeros(Float64, data.J)
+    for j in 1:data.J
+        Q_j3[j] = 1.25*tot_dem / (data.J * data.FLR)
+    end
+    return round.(Q_j3 .* cap_levels', digits=params.round_digits)
+end
 
 
 
