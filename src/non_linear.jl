@@ -7,8 +7,6 @@ using MathOptInterface =#
 function minlp(data, params, status, cost_levels, cap_levels)
     I = 1:data.I
     J = 1:data.J
-    a = data.a
-    # TODO Where is λ used?
     λ = data.λ
     F = data.F
     Q = data.Q
@@ -42,7 +40,6 @@ function minlp(data, params, status, cost_levels, cap_levels)
                                     "Threads" => 1,
                                     #"MIPFocus" => 1,
                                     "TimeLimit" => maxtime + 1,
-                                    #"SolutionLimit" => 1,
                                     "NonConvex" => 2,
                                     )
                                     )
@@ -51,23 +48,23 @@ function minlp(data, params, status, cost_levels, cap_levels)
     @variable(m, y[J,K], Bin)
     
     @variable(m, 0 <= z[J,K,T] <= 1 )
-    @variable(m, 0 <= p[J,T] <= 1)
+    @variable(m, 0 <= ρ[J,T] <= 1)
 
     @variable(m, 0 <= w[J,K,T])
     @variable(m, 0 <= R[J,T])
     
     @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-    0.5*sum(D*(R[j,t] + p[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
+    0.5*sum(D*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
     for j in J, t in T
-        @constraint(m, sum(a[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K), base_name = "cap")
+        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
     end
 
     # All customer zones need to be assigned to exactly one facility
     for i in I, t in T
-        @constraint(m, sum(x[i,j,t] for j in J) == 1, base_name =  "dem")
+        @constraint(m, sum(x[i,j,t] for j in J) == 1)
     end
 
     # At most one capacity level can be selected per facility
@@ -77,9 +74,9 @@ function minlp(data, params, status, cost_levels, cap_levels)
 
     # 14 - 16 - 17 - 19
     for j in J, t in T
-        @constraint(m, sum(a[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
-        @constraint(m, sum(z[j,k,t] for k in K) - p[j,t] == 0)
-        @constraint(m, R[j,t] - R[j,t]*p[j,t] - p[j,t] == 0, base_name = "nlcons")
+        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
+        @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
+        @constraint(m, R[j,t] - R[j,t]*ρ[j,t] - ρ[j,t] == 0)
         @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
     end
     # 15 - 18
@@ -87,7 +84,7 @@ function minlp(data, params, status, cost_levels, cap_levels)
         @constraint(m, z[j,k,t] - y[j,k] <= 0)
         @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
     end 
-    write_to_file(m, "debug_nlp.lp")
+    #write_to_file(m, "debug_nlp.lp")
     optimize!(m)
     end_stat = termination_status(m)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT

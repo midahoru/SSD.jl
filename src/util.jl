@@ -18,7 +18,7 @@ end
 
 function write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, λ, λ_bounds, r_bounds,
      Icoords, Jcoords, C)
-    filename = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t lam_$λ_bounds r_$r_bounds.txt"
+    filename = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t FLR_$FLR FCR_$FCR lam_$λ_bounds r_$r_bounds.txt"
     open(filename, "w") do f
         write(f, "I $nI\n")
         write(f, "J $nJ\n")
@@ -109,7 +109,11 @@ function read_file(filename, data)
                 elseif sline[1] == "I"
                     data.I = parse(Int64, sline[2])
                 elseif sline[1] == "J"
-                    data.J = parse(Int64, sline[2])
+                    data.J = parse(Int64, sline[2])                
+                elseif sline[1] == "bounds"
+                    lb = parse(Float64, replace(sline[2],"(" => "", ","=>""))
+                    ub = parse(Float64, replace(sline[3],")" => ""))
+                    data.coords_bounds = Tuple([lb, ub])
                 elseif sline[1] == "cv"
                     data.cv = parse(Float64, sline[2])
                 elseif sline[1] == "D"
@@ -152,6 +156,16 @@ end
     
 ################################################## Model
 
+function gen_caps(data, params, cap_levels)
+    # Gets the max demand per time period
+    max_dem_t = maximum(sum.(eachcol(data.λ)))
+    Q_j3 = zeros(Float64, data.J)
+    for j in 1:data.J
+        Q_j3[j] = 1.25*max_dem_t / (data.J * data.FLR)
+    end
+    return round.(Q_j3 .* cap_levels', digits=params.round_digits)
+end
+
 function gen_costs(data, params, cost_levels)
     f = (x,y) -> euclidean((x,y), (maximum(data.coords_bounds), maximum(data.coords_bounds))./2)
     F_j3 = zeros(Float64, data.J)
@@ -161,14 +175,7 @@ function gen_costs(data, params, cost_levels)
     return round.(F_j3 .* cost_levels', digits=params.round_digits)
 end
 
-function gen_caps(data, params, cap_levels)
-    tot_dem = sum(data.a[i,t] for i in 1:data.I for t in 1:data.t)
-    Q_j3 = zeros(Float64, data.J)
-    for j in 1:data.J
-        Q_j3[j] = 1.25*tot_dem / (data.J * data.FLR)
-    end
-    return round.(Q_j3 .* cap_levels', digits=params.round_digits)
-end
+
 
 
 

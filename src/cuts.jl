@@ -1,8 +1,8 @@
-#= function model_cuts(data, params, cost_levels, cap_levels)
-    #cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
-    #cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
+function model_cuts(data, params, status, cost_levels, cap_levels)
     I = 1:data.I
     J = 1:data.J
+    a = data.a
+    # TODO Where is λ used?
     λ = data.λ
     F = data.F
     Q = data.Q
@@ -11,22 +11,18 @@
     D = data.D    
     K = 1:data.k
     T = 1:data.t
-    FLR = data.FLR
-    FCR = data.FCR
     M = data.M
 
     F = gen_costs(data, params, cost_levels)
-    Q = gen_caps(data, params, cap_levels)   
-    
-    maxtime = max(1, params.max_time - elapsed())
+    Q = gen_caps(data, params, cap_levels)  
+
     m = Model(optimizer_with_attributes(Gurobi.Optimizer,
                                     "OutputFlag" => 0,
                                     "Threads" => 1,
-                                    "MIPFocus" => 1,
                                     "TimeLimit" => maxtime + 1,
-                                    "SolutionLimit" => 1
                                     )
-                )
+                                    )
+
     @variable(m, x[I,J,T], Bin)
     @variable(m, y[J,K], Bin)
     
@@ -40,14 +36,14 @@
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
     0.5*sum(D*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
-    # Capacity cannot be exceeded and steady state is always true
+    # Capacity cannot be exceeded and steady state has to be conserved
     for j in J, t in T
-        @constraint(m, sum(a[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
+        @constraint(m, sum(a[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K), base_name = "cap")
     end
 
     # All customer zones need to be assigned to exactly one facility
     for i in I, t in T
-        @constraint(m, sum(x[i,j,t] for j in J) == 1)
+        @constraint(m, sum(x[i,j,t] for j in J) == 1, base_name =  "dem")
     end
 
     # At most one capacity level can be selected per facility
@@ -59,14 +55,17 @@
     for j in J, t in T
         @constraint(m, sum(a[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
         @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
-        @constraint(m, R[j,t] = ρ[j,t]/(1-ρ[j,t]))
         @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
     end
     # 15 - 18
     for j in J, t in T, k in K
         @constraint(m, z[j,k,t] - y[j,k] <= 0)
-        @constraint(m, w[j,k,t] - M*y[j,k])
-    end 
+        @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
+    end
+
+    for j in J, h in H, t in T
+        @constraint(m, R[j,t] + ρ[j,t]/((1- ρ_h[j,t, h])^2) >= ρ_h[j,t,h]^2/((1- ρ_h[j,t,h])^2))
+    end
 
     #=function lazycb(cb)
         xvals = callback_value.(cb, x)
@@ -113,4 +112,4 @@
         return xval, yval, optval
     else return [], [], 0
     end
-end =#
+end

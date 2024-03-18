@@ -13,7 +13,6 @@ mutable struct Data
     Jcoords::Matrix{Float64} 
     coords_bounds::Tuple{Float64, Float64} 
     dist::Matrix{Float64}
-    a::Matrix{Float64}
     λ::Matrix{Float64}
     F::Matrix{Float64}
     Q::Matrix{Float64}
@@ -42,7 +41,7 @@ end
 
 default_params() = Parameters(30*60, 10^-5, 4, MersenneTwister(0), MersenneTwister(15))
 default_data() = Data(0, 0, Array{Float64,}(undef,0,0), Array{Float64}(undef,0,0), (0,1), 
-Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), 
+Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), Array{Float64}(undef,0,0,0),
  1, 1, 1, 1, 1, 1, 100000)
 init_solver_status() = SolverStatus(Dates.now(), Dates.now(), true, :none)

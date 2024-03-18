@@ -15,27 +15,42 @@ k=5 # Number of capacity levels
 t=3 # Time periods
 λ_bounds=(80,120) # Bounds for λ   
 
-nI=250 # Number of customers zones
-nJ=25 # Number of potential facilities locations
-
+nodes_sizes = [(50,5),(100,10), (150,15), (200,20), (250,25)] #(customers, facilities)
 cvs = [0.5, 1, 1.5] # Options for cv
-Ds = [1, 10, 25, 50, 100] # Options for D
-for cv in cvs
-    for D in Ds
-        SSD.instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, params0)
+Dt = [1, 10, 25, 50, 100] # Options for D
+FLR = [0.4, 0.6, 0.8] # Facility load ratio
+FCR = [2,4,8,10] # Facility capacity ratio
+for (nI, nJ) in nodes_sizes
+    for cv in cvs
+        for D in Dt
+            for flr in FLR
+                for fcr in FCR
+                    SSD.instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, flr, fcr, params0)
+                end
+            end
+        end
     end
 end
 ```
 
-### Solving the exact non-linear problem
+### Solve the exact problem with a non-linear constraint
 ```julia
 # Import the package
 using SSD
 
+# Create default parameters
+params = SSD.default_params()
 # Create the data container
-data = default_data()
+data = SSD.default_data()
 
 
 # Read the instance to solve
 filename = "I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 lam_(80, 120) r_(0.3, 0.4).txt"
-SSD.read_instance()
+SSD.read_instance(filename, data)
+
+# Define the different cost levels
+cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
+# Define the different capacity levels
+cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
+
+x, y, cost = SSD.minlp(data, params0, status, cost_levels, cap_levels)
