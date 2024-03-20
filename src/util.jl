@@ -154,7 +154,7 @@ function read_file(filename, data)
 end
 
     
-################################################## Model
+################################################## Models
 
 function gen_caps(data, params, cap_levels)
     # Gets the max demand per time period
@@ -173,6 +173,69 @@ function gen_costs(data, params, cost_levels)
         F_j3[j] = data.FCR*f(data.Jcoords[1,j], data.Jcoords[2,j])
     end
     return round.(F_j3 .* cost_levels', digits=params.round_digits)
+end
+
+
+
+################################################## Linear model with cuts
+
+function calc_ub(ub, x, y, data)
+    I = 1:data.I
+    J = 1:data.J
+    λ = data.λ
+    C = data.C
+    F = data.F
+    Q = data.Q
+    cv = data.cv
+    D = data.D    
+    K = 1:data.k
+    T = 1:data.t
+
+    term_1 = sum(F[j,k]*y[j,k] for j in J for k in K) 
+    term_2 = sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T)
+    term_3 = 0
+    for t in T
+        term_3_t = 0
+        for j in J
+            den_1 = 2*sum(Q[j,k]*y[j,k] for k in K)*(sum(Q[j,k]*y[j,k] for k in K)-sum(λ[i,t]*x[i,j,t] for i in I))
+            den_2 = sum(Q[j,k]*y[j,k] for k in K)
+            if den_1 != 0 && den_2 != 0
+                sum_temp = ((1+cv^2*sum(y[j,k] for k in K)*sum(λ[i,t]*x[i,j,t] for i in I))/(den_1))+
+                +(sum(λ[i,t]*x[i,j,t] for i in I)/den_2)
+                #println(sum_temp)
+                term_3_t += sum_temp
+            end        
+        end
+        term_3 += D*term_3_t/sum(λ[i,t] for i in I)
+    end
+    new_ub = term_1 + term_2 + term_3
+    println(term_1)
+    println(term_2)
+    println(term_3)
+    println(ub)
+    return minimum([ub, new_ub])
+end
+
+function calc_new_ρ(xq, yq, data)
+    I = 1:data.I
+    J = 1:data.J 
+    T = 1:data.t 
+    K = 1:data.k
+
+    ρ_new = Array{Float64}(undef,data.J,data.t)
+    for j in J
+        for t in T
+            num = sum(data.λ[i,t].*xq[i,j,t] for i in I)
+            den = sum(data.Q[j,k]*yq[j,k] for k in K)
+            if den > 0
+                ρ_new[j,t]=num/den
+            else
+                ρ_new[j,t]=0
+            end
+        end
+    end
+
+    return ρ_new
 end
 
 

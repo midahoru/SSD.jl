@@ -14,5 +14,6 @@ module SSD
     include("iter.jl")
     include("util.jl")
     include("non_linear.jl")
+    include("cuts.jl")
 
 end # module SSD

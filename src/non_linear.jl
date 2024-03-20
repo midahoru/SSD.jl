@@ -4,21 +4,18 @@ using Gurobi
 using JuMP
 using MathOptInterface =#
 
-function minlp(data, params, status, cost_levels, cap_levels)
+function minlp(data, params, status)
     I = 1:data.I
     J = 1:data.J
     λ = data.λ
+    C = data.C
     F = data.F
     Q = data.Q
-    C = data.C
     cv = data.cv
     D = data.D    
     K = 1:data.k
     T = 1:data.t
     M = data.M
-
-    F = gen_costs(data, params, cost_levels)
-    Q = gen_caps(data, params, cap_levels)  
     
     #ipopt = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
     #gurobi = optimizer_with_attributes(Gurobi.Optimizer, "output_flag" => false)

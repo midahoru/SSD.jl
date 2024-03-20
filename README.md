@@ -50,7 +50,48 @@ SSD.read_instance(filename, data)
 
 # Define the different cost levels
 cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
+data.F = gen_costs(data, params, cost_levels)
 # Define the different capacity levels
 cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
+data.Q = gen_caps(data, params, cap_levels)
 
-x, y, cost = SSD.minlp(data, params0, status, cost_levels, cap_levels)
+status = SSD.init_solver_status()
+
+x, y, cost = SSD.minlp(data, params0, status)
+```
+
+
+### Solve the problem with the linear approximation
+```julia
+# Import the package
+using SSD
+
+# Create default parameters
+params = SSD.default_params()
+# Create the data container
+data = SSD.default_data()
+
+
+# Read the instance to solve
+filename = "I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 lam_(80, 120) r_(0.3, 0.4).txt"
+SSD.read_instance(filename, data)
+
+# Define the different cost levels
+cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
+data.F = gen_costs(data, params, cost_levels)
+# Define the different capacity levels
+cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
+data.Q = gen_caps(data, params, cap_levels)
+
+# Create the set ρ_h with values between 0 and 1
+# without the extreme points of the domain     
+ ρ_h = collect(range(0.1,step=0.1,0.9))
+
+
+
+
+
+
+
+
+```
