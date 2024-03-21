@@ -8,6 +8,9 @@ Service system design with service time variability and time varying demand
 # Import the package
 using SSD
 
+# Create default parameters
+params = SSD.default_params()
+
 # Specify the attributes defining the instances
 coords_bounds=(0,100) # Bounds for the coords of the nodes
 r_bounds=(0.3, 0.4) # Bounds of r
@@ -25,7 +28,7 @@ for (nI, nJ) in nodes_sizes
         for D in Dt
             for flr in FLR
                 for fcr in FCR
-                    SSD.instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, flr, fcr, params0)
+                    SSD.instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, flr, fcr, params)
                 end
             end
         end
@@ -57,7 +60,7 @@ data.Q = gen_caps(data, params, cap_levels)
 
 status = SSD.init_solver_status()
 
-x, y, cost = SSD.minlp(data, params0, status)
+x, y, cost = SSD.minlp(data, params, status)
 ```
 
 
