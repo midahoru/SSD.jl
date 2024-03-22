@@ -186,7 +186,7 @@ function ini_ρ_h(data)
     T = 1:data.t 
     K = 1:data.k
 
-    ini_ρ_h = collect(range(0.1,step=0.1,0.9))
+    ini_ρ_h = collect(range(0.1,step=0.4,0.9))
     H = 1:length(ini_ρ_h)
     ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
 

@@ -7,10 +7,14 @@ function cutting_plane(data, params, status, ρ_h)
     while (ub-lb)/lb >= params.ϵ
         println("Current LB= $lb ; UB = $ub")
         xq, yq, lb = model_cuts(data, params, status, ρ_h)
+        println("Optimal LB= $lb")
         
         ub = calc_ub(ub, xq, yq, data)
 
         ρ_new = calc_new_ρ(xq, yq, data)
+        println("ρ_new = $ρ_new")
+        println(maximum(ρ_new))
+        println(minimum(ρ_new))
 
         cat(ρ_h, ρ_new, dims=3)
         q+=1

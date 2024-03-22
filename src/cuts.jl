@@ -49,16 +49,19 @@ function model_cuts(data, params, status, ρ_h)
         @constraint(m, sum(y[j,k] for k in K) <= 1)
     end
 
-    # 14 - 16 - 17 - 19
+    # 13 - 15 - 16 - 18
     for j in J, t in T
         @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
         @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
         @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
         for h in H
-            @constraint(m, R[j,t] - ρ[j,t]/(1-ρ_h[j,t,h])^2 >= -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2)
+            others = [h2 for h2 in H if h2 < h]
+            if ~(ρ_h[j,t,h] in ρ_h[j,t,others])
+                @constraint(m, R[j,t] - ρ[j,t]/(1-ρ_h[j,t,h])^2 >= -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2)
+            end
         end
     end
-    # 15 - 18
+    # 14 - 17
     for j in J, t in T, k in K
         @constraint(m, z[j,k,t] - y[j,k] <= 0)
         @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
