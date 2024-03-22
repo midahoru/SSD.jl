@@ -1,24 +1,26 @@
 ################################################## Instances
 
-function instance_gen(nI, nJ, coords_bounds, λ_bounds, r_bounds, cv, D, k, t, FLR, FCR, params)
+function instance_gen(nI, nJ, coords_bounds, a_bounds, r_bounds, cv, D, k, t, FLR, FCR, params)
 
     Icoords = round.(rand(params.rng, Uniform(coords_bounds[1], coords_bounds[2]), 2, nI),
         digits=params.round_digits)
     Jcoords = round.(rand(params.rng2, Uniform(coords_bounds[1], coords_bounds[2]), 2, nJ),
         digits=params.round_digits)
     dist = round.(pairwise(euclidean,Icoords, Jcoords), digits=params.round_digits)
-    λ = round.(rand(params.rng, Uniform(λ_bounds[1], λ_bounds[2]), nI, t),
-        digits=params.round_digits)
+    #= λ = round.(rand(params.rng, Uniform(λ_bounds[1], λ_bounds[2]), nI, t),
+        digits=params.round_digits) =#
+    a  = round.(rand(params.rng, Poisson(rand(params.rng, Uniform(a_bounds[1], a_bounds[2]))), nI, t),
+        digits=0)
     r = round.(rand(params.rng, Uniform(r_bounds[1], r_bounds[2]), nI, nJ, t),
     digits=params.round_digits)
     C = round.(r .* dist, digits=params.round_digits)   
 
-    write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, λ, λ_bounds, r_bounds, Icoords, Jcoords, C)
+    write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, a, a_bounds, r_bounds, Icoords, Jcoords, C)
 end
 
-function write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, λ, λ_bounds, r_bounds,
+function write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, a, a_bounds, r_bounds,
      Icoords, Jcoords, C)
-    filename = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t FLR_$FLR FCR_$FCR lam_$λ_bounds r_$r_bounds.txt"
+    filename = "instances/I_$nI J_$nJ $coords_bounds cv_$cv D_$D k_$k t_$t FLR_$FLR FCR_$FCR a_$a_bounds r_$r_bounds.txt"
     open(filename, "w") do f
         write(f, "I $nI\n")
         write(f, "J $nJ\n")
@@ -29,10 +31,10 @@ function write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, λ, λ_bounds,
         write(f, "t $t\n")
         write(f, "FLR $FLR\n")
         write(f, "FCR $FCR\n")
-        write(f, "λbounds $λ_bounds\n\n")        
-        write(f, "λ \n")
+        write(f, "abounds $a_bounds\n\n")        
+        write(f, "a \n")
         for i in 1:size(Icoords,2)
-            lams = λ[i,:]
+            lams = a[i,:]
             for l in lams
                 write(f, "$l ")
             end
@@ -73,7 +75,7 @@ end
 
 function read_file(filename, data)    
     open("instances/$filename","r") do f
-        λ_ = false
+        A_ = false
         i_coords = false
         j_coords = false
         c_ = false
@@ -86,9 +88,9 @@ function read_file(filename, data)
             if line == "EOF"
                 break
             elseif line != ""
-                if λ_
+                if A_
                     row = map(t -> parse(Float64, t), sline)
-                    data.λ[ini_count,:] = row
+                    data.a[ini_count,:] = row
                     ini_count += 1
                 elseif i_coords
                     col = map(t -> parse(Float64, t), sline)
@@ -122,7 +124,7 @@ function read_file(filename, data)
                     data.k = parse(Int64, sline[2])
                 elseif sline[1] == "t"
                     data.t = parse(Int64, sline[2])
-                    data.λ = Array{Float64}(undef, data.I, data.t)
+                    data.a = Array{Float64}(undef, data.I, data.t)
                     data.Icoords = Matrix{Float64}(undef, 2, data.I)
                     data.Jcoords = Matrix{Float64}(undef, 2, data.J)
                     data.C = Array{Float64}(undef, data.I, data.J, data.t)
@@ -130,8 +132,8 @@ function read_file(filename, data)
                     data.FLR = parse(Float64, sline[2])
                 elseif sline[1] == "FCR"
                     data.FCR = parse(Float64, sline[2])
-                elseif sline[1] == "λ"
-                    λ_ = true
+                elseif sline[1] == "a"
+                    A_ = true
                 elseif sline[1] == "Icoords"
                     i_coords = true
                     ini_count = 1
@@ -143,7 +145,7 @@ function read_file(filename, data)
                     ini_count = 1
                 end
             elseif line == ""
-                λ_ = false
+                A_ = false
                 i_coords = false
                 j_coords = false
                 c_ = false            
@@ -158,7 +160,7 @@ end
 
 function gen_caps(data, params, cap_levels)
     # Gets the max demand per time period
-    max_dem_t = maximum(sum.(eachcol(data.λ)))
+    max_dem_t = maximum(sum.(eachcol(data.a)))
     Q_j3 = zeros(Float64, data.J)
     for j in 1:data.J
         Q_j3[j] = 1.25*max_dem_t / (data.J * data.FLR)
@@ -178,11 +180,27 @@ end
 
 
 ################################################## Linear model with cuts
+function ini_ρ_h(data)
+    I = 1:data.I
+    J = 1:data.J 
+    T = 1:data.t 
+    K = 1:data.k
+
+    ini_ρ_h = collect(range(0.1,step=0.1,0.9))
+    H = 1:length(ini_ρ_h)
+    ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
+
+    for j in J, t in T, h in H
+        ρ_h[j, t, h]= ini_ρ_h[h]
+    end
+
+    return ρ_h
+end
 
 function calc_ub(ub, x, y, data)
     I = 1:data.I
     J = 1:data.J
-    λ = data.λ
+    λ = data.a
     C = data.C
     F = data.F
     Q = data.Q
@@ -200,41 +218,38 @@ function calc_ub(ub, x, y, data)
             den_1 = 2*sum(Q[j,k]*y[j,k] for k in K)*(sum(Q[j,k]*y[j,k] for k in K)-sum(λ[i,t]*x[i,j,t] for i in I))
             den_2 = sum(Q[j,k]*y[j,k] for k in K)
             if den_1 != 0 && den_2 != 0
-                sum_temp = ((1+cv^2*sum(y[j,k] for k in K)*sum(λ[i,t]*x[i,j,t] for i in I))/(den_1))+
+                sum_temp = ((1+cv^2*sum(y[j,k] for k in K))*sum(λ[i,t]*x[i,j,t] for i in I)^2/(den_1))+
                 +(sum(λ[i,t]*x[i,j,t] for i in I)/den_2)
-                #println(sum_temp)
                 term_3_t += sum_temp
             end        
         end
         term_3 += D*term_3_t/sum(λ[i,t] for i in I)
     end
     new_ub = term_1 + term_2 + term_3
-    println(term_1)
-    println(term_2)
-    println(term_3)
-    println(ub)
     return minimum([ub, new_ub])
 end
 
 function calc_new_ρ(xq, yq, data)
     I = 1:data.I
     J = 1:data.J 
+    λ = data.a
     T = 1:data.t 
     K = 1:data.k
+    Q = data.Q    
+    T = 1:data.t
 
     ρ_new = Array{Float64}(undef,data.J,data.t)
     for j in J
         for t in T
-            num = sum(data.λ[i,t].*xq[i,j,t] for i in I)
-            den = sum(data.Q[j,k]*yq[j,k] for k in K)
-            if den > 0
+            num = sum(λ[i,t].*xq[i,j,t] for i in I)
+            den = sum(Q[j,k]*yq[j,k] for k in K)
+            if den != 0
                 ρ_new[j,t]=num/den
             else
                 ρ_new[j,t]=0
             end
         end
     end
-
     return ρ_new
 end
 

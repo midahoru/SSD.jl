@@ -1,7 +1,7 @@
 function model_cuts(data, params, status, ρ_h)
     I = 1:data.I
     J = 1:data.J
-    λ = data.λ
+    λ = data.a
     C = data.C
     F = data.F
     Q = data.Q
@@ -18,7 +18,6 @@ function model_cuts(data, params, status, ρ_h)
                                     "Threads" => 1,
                                     #"MIPFocus" => 1,
                                     "TimeLimit" => maxtime + 1,
-                                    "NonConvex" => 2,
                                     )
                                     )
 
