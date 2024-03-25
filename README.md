@@ -76,8 +76,8 @@ data = SSD.default_data()
 
 
 # Read the instance to solve
-filename = "I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 lam_(80, 120) r_(0.3, 0.4).txt"
-SSD.read_instance(filename, data)
+filename = "I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 FLR_0.4 FCR_2 a_(80, 120) r_(0.3, 0.4).txt"
+SSD.read_file(filename, data)
 
 # Define the different cost levels
 cost_levels = [0.60, 0.85, 1, 1.15, 1.35]

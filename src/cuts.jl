@@ -16,6 +16,7 @@ function model_cuts(data, params, status, ρ_h)
     m = Model(optimizer_with_attributes(Gurobi.Optimizer,
                                     "OutputFlag" => 0,
                                     "Threads" => 1,
+                                    "MIPGap" => 1e-9,
                                     #"MIPFocus" => 1,
                                     "TimeLimit" => maxtime + 1,
                                     )
@@ -32,7 +33,7 @@ function model_cuts(data, params, status, ρ_h)
     
     @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-    0.5*sum(D*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
+    0.5*sum((D/sum(λ[i,t] for i in I))*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
     for j in J, t in T
@@ -54,13 +55,14 @@ function model_cuts(data, params, status, ρ_h)
         @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
         @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
         @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
-        for h in H
-            others = [h2 for h2 in H if h2 < h]
-            if ~(ρ_h[j,t,h] in ρ_h[j,t,others])
-                @constraint(m, R[j,t] - ρ[j,t]/(1-ρ_h[j,t,h])^2 >= -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2)
-            end
-        end
+        # for h in H
+        #     others = [h2 for h2 in H if h2 < h]
+        #     if ~(ρ_h[j,t,h] in ρ_h[j,t,others])
+        #         @constraint(m, (1-ρ_h[j,t,h])^2 * R[j,t] - ρ[j,t] >= -ρ_h[j,t,h]^2)
+        #     end
+        # end
     end
+    @constraint(m, [j in J, t in T, h in H], (1-ρ_h[j,t,h])^2 * R[j,t] - ρ[j,t] >= -ρ_h[j,t,h]^2)
     # 14 - 17
     for j in J, t in T, k in K
         @constraint(m, z[j,k,t] - y[j,k] <= 0)
@@ -112,8 +114,10 @@ function model_cuts(data, params, status, ρ_h)
         end
         xval = value.(x)
         yval = value.(y)
+        ρval = value.(ρ)
+        Rval = value.(R)
         optval = objective_value(m)
-        return xval, yval, optval
+        return xval, yval, ρval, Rval, optval
     else return [], [], 0
     end
 end
