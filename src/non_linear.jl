@@ -52,7 +52,7 @@ function minlp(data, params, status)
     
     @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-    0.5*sum(D*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
+    0.5*sum((D/sum(λ[i,t] for i in I))*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
     for j in J, t in T
@@ -93,6 +93,6 @@ function minlp(data, params, status)
         yval = value.(y)
         optval = objective_value(m)
         return xval, yval, optval
-    else return [], [], 0
+    else return [], [], objective_value(m)
     end
 end
