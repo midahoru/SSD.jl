@@ -32,39 +32,39 @@ function model_cuts(data, params, status, ρ_h)
     
     @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-    0.5*sum(D*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
+    0.5*sum((D/sum(λ[i,t] for i in I))*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
     for j in J, t in T
-        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
+        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K), base_name ="c3")
     end
 
     # All customer zones need to be assigned to exactly one facility
     for i in I, t in T
-        @constraint(m, sum(x[i,j,t] for j in J) == 1)
+        @constraint(m, sum(x[i,j,t] for j in J) == 1, base_name ="c4")
     end
 
     # At most one capacity level can be selected per facility
     for j in J
-        @constraint(m, sum(y[j,k] for k in K) <= 1)
+        @constraint(m, sum(y[j,k] for k in K) <= 1, base_name ="c5")
     end
 
     # 13 - 15 - 16 - 18
     for j in J, t in T
-        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
-        @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
-        @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
+        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0, base_name ="c13")
+        @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0, base_name ="c15")
+        @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0, base_name ="c18")
         for h in H
             others = [h2 for h2 in H if h2 < h]
             if ~(ρ_h[j,t,h] in ρ_h[j,t,others])
-                @constraint(m, R[j,t] - ρ[j,t]/(1-ρ_h[j,t,h])^2 >= -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2)
+                @constraint(m, R[j,t] - ρ[j,t]/(1-ρ_h[j,t,h])^2 >= -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2, base_name ="c16")
             end
         end
     end
     # 14 - 17
     for j in J, t in T, k in K
-        @constraint(m, z[j,k,t] - y[j,k] <= 0)
-        @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
+        @constraint(m, z[j,k,t] - y[j,k] <= 0, base_name ="c14")
+        @constraint(m, w[j,k,t] - M*8000*y[j,k] <= 0, base_name ="c17")
     end 
 
     #=function lazycb(cb)
@@ -102,7 +102,7 @@ function model_cuts(data, params, status, ρ_h)
     end
 
     MOI.set(m, MOI.LazyConstraintCallback(), lazycb) =#
-
+    write_to_file(m, "debug_cuts.lp")
     optimize!(m)
     end_stat = termination_status(m)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
