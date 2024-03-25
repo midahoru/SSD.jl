@@ -4,14 +4,17 @@ function cutting_plane(data, params, status, ρ_h)
 
     xq, yq, lb = [], [], 0
     q = 0
+
+    Dt = [data.D/sum(data.a[i, t] for i in 1:data.I) for t in 1:data.t]
+
     while (ub-lb)/ub >= params.ϵ
         println("Current LB= $lb ; UB = $ub")
         xq, yq, ρ_q, Rq, lb = model_cuts(data, params, status, ρ_h)
         println("Optimal LB= $lb")
-        
+        println("max R = $(maximum(Rq))")
         ub = calc_ub(ub, xq, yq, data)
 
-        other_ub = lb + sum(data.D/sum(data.a[i, t] for i in 1:data.I)*((ρ_q[j, t]/(1-ρ_q[j,t]))-Rq[j,t]) for j in 1:data.J for t in 1:data.t)
+        other_ub = lb + sum(Dt[t]*((ρ_q[j, t]/(1-ρ_q[j,t]))-Rq[j,t]) for j in 1:data.J for t in 1:data.t)
         println("other_ub - ub = $(other_ub - ub)")
         diff = [(ρ_q[j, t] / (1 - ρ_q[j, t])) - Rq[j, t] for j in 1:data.J for t in 1:data.t]
         println("max diff = $(maximum(diff))")
