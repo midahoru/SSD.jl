@@ -2,7 +2,7 @@ function cutting_plane(data, params, status, ρ_h)
     # Initialize the bounds
     lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)
 
-    xq, yq, lb = [], [], 0
+    xq, yq = [], []
     q = 0
 
     while (ub-lb)/ub >= params.ϵ
