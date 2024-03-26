@@ -71,6 +71,14 @@ function calc_ub(ub, x, y, data)
     return minimum([ub, new_ub])
 end
 
+function calc_ub(lb, ub, ρq, Rq, wq, data)
+    Dt = [data.D/sum(data.a[i, t] for i in 1:data.I) for t in 1:data.t]
+
+    new_ub = lb + sum(Dt[t]*(((ρq[j, t]/(1-ρq[j,t]))-Rq[j,t]) + data.cv^2((ρq[j, t]/(1-ρq[j,t]))-
+    sum(wq[j,k,t] for k in 1:data.k))) for j in 1:data.J for t in 1:data.t)
+    return minimum([ub, new_ub])
+end
+
 function calc_new_ρ(xq, yq, data)
     I = 1:data.I
     J = 1:data.J 

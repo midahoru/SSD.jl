@@ -16,22 +16,10 @@ function minlp(data, params, status)
     K = 1:data.k
     T = 1:data.t
     M = data.M
-    
-    #ipopt = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
-    #gurobi = optimizer_with_attributes(Gurobi.Optimizer, "output_flag" => false)
+
+    Dt = [D/sum(λ[i, t] for i in I) for t in T]
     
     maxtime = max(1, params.max_time - elapsed(status))
-    #= m = Model(optimizer_with_attributes(Alpine.Optimizer,
-                                    "nlp_solver" => ipopt,
-                                    "mip_solver" => gurobi,
-                                    "minlp_solver" => ipopt,
-                                    #"OutputFlag" => 0,
-                                    #"Threads" => 1,
-                                    #"MIPFocus" => 1,
-                                    #"TimeLimit" => maxtime + 1,
-                                    #"SolutionLimit" => 1
-                                    )
-                                    ) =#
     m = Model(optimizer_with_attributes(Gurobi.Optimizer,
                                     "OutputFlag" => 0,
                                     "Threads" => 1,
@@ -52,36 +40,46 @@ function minlp(data, params, status)
     
     @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-    0.5*sum((D/sum(λ[i,t] for i in I))*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
+    0.5*sum(Dt[t]*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
-    for j in J, t in T
-        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
-    end
+    # for j in J, t in T
+    #     @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
+    # end
+    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
 
     # All customer zones need to be assigned to exactly one facility
-    for i in I, t in T
-        @constraint(m, sum(x[i,j,t] for j in J) == 1)
-    end
+    # for i in I, t in T
+    #     @constraint(m, sum(x[i,j,t] for j in J) == 1)
+    # end
+    @constraint(m, [i in I, t in T], sum(x[i,j,t] for j in J) == 1)
 
     # At most one capacity level can be selected per facility
-    for j in J
-        @constraint(m, sum(y[j,k] for k in K) <= 1)
-    end
+    # for j in J
+    #     @constraint(m, sum(y[j,k] for k in K) <= 1)
+    # end
+    @constraint(m, [j in J], sum(y[j,k] for k in K) <= 1)
 
     # 14 - 16 - 17 - 19
-    for j in J, t in T
-        @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
-        @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
-        @constraint(m, R[j,t] - R[j,t]*ρ[j,t] - ρ[j,t] == 0)
-        @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
-    end
+    # for j in J, t in T
+    #     @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
+    #     @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
+    #     @constraint(m, R[j,t] - R[j,t]*ρ[j,t] - ρ[j,t] == 0)
+    #     @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
+    # end
+    @constraint(m,[j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
+    @constraint(m,[j in J, t in T], sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
+    @constraint(m,[j in J, t in T], R[j,t] - R[j,t]*ρ[j,t] - ρ[j,t] == 0)
+    @constraint(m,[j in J, t in T], sum(w[j,k,t] for k in K)-R[j,t] == 0)
+
     # 15 - 18
-    for j in J, t in T, k in K
-        @constraint(m, z[j,k,t] - y[j,k] <= 0)
-        @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
-    end 
-    #write_to_file(m, "debug_nlp.lp")
+    # for j in J, t in T, k in K
+    #     @constraint(m, z[j,k,t] - y[j,k] <= 0)
+    #     @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
+    # end 
+    @constraint(m,[j in J, t in T, k in K],  z[j,k,t] - y[j,k] <= 0)
+    @constraint(m,[j in J, t in T, k in K],  w[j,k,t] - M*y[j,k] <= 0)
+    
     optimize!(m)
     end_stat = termination_status(m)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
