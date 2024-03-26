@@ -90,8 +90,6 @@ function calc_new_ρ(xq, yq, data)
         den = sum(Q[j,k]*yq[j,k] for k in K)
         if den != 0
             ρ_new[j,t]=num/den
-        else
-            ρ_new[j,t]=0
         end
     end
     return ρ_new
