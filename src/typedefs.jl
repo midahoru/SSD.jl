@@ -44,5 +44,5 @@ default_params() = Parameters(3*60*60, 10^-5, 4, MersenneTwister(0), MersenneTwi
 default_data() = Data(0, 0, Array{Float64,}(undef,0,0), Array{Float64}(undef,0,0), (0,1), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), Array{Float64}(undef,0,0,0),
- 1, 1, 1, 1, 1, 1, 100)
+ 1, 1, 1, 1, 1, 1, 1000)
 init_solver_status() = SolverStatus(Dates.now(), Dates.now(), true, :none, 0)
