@@ -24,7 +24,7 @@ function cutting_plane(data, params, status, ρ_h)
         # println(maximum(ρ_new))
         # println(minimum(ρ_new))
         println("rho = $ρ_q")
-        cat(ρ_h, ρ_q, dims=3)
+        ρ_h = cat(ρ_h, ρ_q, dims=3)
         q+=1
         println("Iter $q: LB= $lb ; UB = $ub")
     end
