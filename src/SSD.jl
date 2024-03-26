@@ -9,6 +9,7 @@ module SSD
     using MathOptInterface
     using Distributions
     using Distances
+    using LinearAlgebra
 
     include("typedefs.jl")
     include("iter.jl")

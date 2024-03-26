@@ -103,8 +103,9 @@ function model_cuts(data, params, status, ρ_h)
         yval = value.(y)
         ρval = value.(ρ)
         Rval = value.(R)
+        wval = value.(w)
         optval = objective_value(m)
-        return xval, yval, ρval, Rval, optval
+        return xval, yval, ρval, Rval, wval, optval
     else return [], [], 0
     end
 end
