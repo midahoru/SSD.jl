@@ -76,7 +76,7 @@ data = SSD.default_data()
 
 
 # Read the instance to solve
-filename = "I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 FLR_0.4 FCR_2 a_(80, 120) r_(0.3, 0.4).txt"
+filename = "instances/I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 FLR_0.4 FCR_2 a_(80, 120) r_(0.3, 0.4).txt"
 SSD.read_file(filename, data)
 
 # Define the different cost levels
@@ -92,7 +92,10 @@ data.Q = SSD.gen_caps(data, params, cap_levels)
 
 status = SSD.init_solver_status()
 
-x, y, cost = SSD.cutting_plane(data, params, status, ρ_h, ϵ)
+lb, ub, x, y = SSD.cutting_plane(data, params, status, ρ_h, ϵ)
+
+# Gets the number of iterations
+println("N. iter = $(status.nIter)")
 
 
 

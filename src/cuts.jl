@@ -12,7 +12,7 @@ function model_cuts(data, params, status, ρ_h)
     M = data.M
     H = 1:size(ρ_h,3)
 
-    Dt = [data.D/sum(λ[i, t] for i in I) for t in T]
+    Dt = [D/sum(λ[i, t] for i in I) for t in T]
     
     maxtime = max(1, params.max_time - elapsed(status))
     m = Model(optimizer_with_attributes(Gurobi.Optimizer,
@@ -35,7 +35,6 @@ function model_cuts(data, params, status, ρ_h)
     
     @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
     sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-
     0.5*sum(Dt[t]*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
@@ -91,7 +90,7 @@ function model_cuts(data, params, status, ρ_h)
     end
 
     MOI.set(m, MOI.LazyConstraintCallback(), lazycb) =#
-    write_to_file(m, "debug_cuts.lp")
+    #write_to_file(m, "debug_cuts.lp")
     optimize!(m)
     end_stat = termination_status(m)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
@@ -106,6 +105,6 @@ function model_cuts(data, params, status, ρ_h)
         wval = value.(w)
         optval = objective_value(m)
         return xval, yval, ρval, Rval, wval, optval
-    else return [], [], 0
+    else return [], [], [], [], [], 0
     end
 end
