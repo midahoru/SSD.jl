@@ -43,40 +43,21 @@ function minlp(data, params, status)
     0.5*sum(Dt[t]*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
 
     # Capacity cannot be exceeded and steady state has to be conserved
-    # for j in J, t in T
-    #     @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
-    # end
-    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) <= sum(Q[j,k]*y[j,k] for k in K))
+    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*y[j,k] for k in K) <= 0)
 
     # All customer zones need to be assigned to exactly one facility
-    # for i in I, t in T
-    #     @constraint(m, sum(x[i,j,t] for j in J) == 1)
-    # end
     @constraint(m, [i in I, t in T], sum(x[i,j,t] for j in J) == 1)
 
     # At most one capacity level can be selected per facility
-    # for j in J
-    #     @constraint(m, sum(y[j,k] for k in K) <= 1)
-    # end
     @constraint(m, [j in J], sum(y[j,k] for k in K) <= 1)
 
     # 14 - 16 - 17 - 19
-    # for j in J, t in T
-    #     @constraint(m, sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
-    #     @constraint(m, sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
-    #     @constraint(m, R[j,t] - R[j,t]*ρ[j,t] - ρ[j,t] == 0)
-    #     @constraint(m, sum(w[j,k,t] for k in K)-R[j,t] == 0)
-    # end
     @constraint(m,[j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0)
     @constraint(m,[j in J, t in T], sum(z[j,k,t] for k in K) - ρ[j,t] == 0)
     @constraint(m,[j in J, t in T], R[j,t] - R[j,t]*ρ[j,t] - ρ[j,t] == 0)
     @constraint(m,[j in J, t in T], sum(w[j,k,t] for k in K)-R[j,t] == 0)
 
     # 15 - 18
-    # for j in J, t in T, k in K
-    #     @constraint(m, z[j,k,t] - y[j,k] <= 0)
-    #     @constraint(m, w[j,k,t] - M*y[j,k] <= 0)
-    # end 
     @constraint(m,[j in J, t in T, k in K],  z[j,k,t] - y[j,k] <= 0)
     @constraint(m,[j in J, t in T, k in K],  w[j,k,t] - M*y[j,k] <= 0)
     
