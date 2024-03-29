@@ -23,12 +23,10 @@ end
 
 ################################################## Linear model with cuts
 function ini_ρ_h(data)
-    I = 1:data.I
     J = 1:data.J 
-    T = 1:data.t 
-    K = 1:data.k
+    T = 1:data.t
 
-    ini_ρ_h = collect(range(0.1,step=0.4,0.9))
+    ini_ρ_h = collect(range(0.1,step=0.1,0.9))
     H = 1:length(ini_ρ_h)
     ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
 
@@ -70,7 +68,7 @@ end
 function calc_ub(lb, ub, ρq, Rq, wq, data)
     Dt = [data.D/sum(data.a[i, t] for i in 1:data.I) for t in 1:data.t]
 
-    new_ub = lb + sum(Dt[t]*(((ρq[j, t]/(1-ρq[j,t]))-Rq[j,t]) + data.cv^2((ρq[j, t]/(1-ρq[j,t]))-
+    new_ub = lb + sum(Dt[t]*(((ρq[j, t]/(1-ρq[j,t]))-Rq[j,t]) + data.cv^2*((ρq[j, t]/(1-ρq[j,t]))-
     sum(wq[j,k,t] for k in 1:data.k))) for j in 1:data.J for t in 1:data.t)
     return minimum([ub, new_ub])
 end

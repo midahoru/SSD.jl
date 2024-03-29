@@ -1,4 +1,4 @@
-function model_cuts(data, params, status, ρ_h)
+function model_lazy_cuts(data, params, status, ρ_h)
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -55,7 +55,7 @@ function model_cuts(data, params, status, ρ_h)
     @constraint(m, [j in J, t in T, k in K], z[j,k,t] - y[j,k] <= 0, base_name = "c14")
     @constraint(m, [j in J, t in T, k in K], w[j,k,t] - M*y[j,k] <= 0, base_name = "c17")
     
-    #=function lazycb(cb)
+    function lazycb(cb)
         xvals = callback_value.(cb, x)
         zvals = callback_value.(cb, z)
         
@@ -89,8 +89,8 @@ function model_cuts(data, params, status, ρ_h)
         end
     end
 
-    MOI.set(m, MOI.LazyConstraintCallback(), lazycb) =#
-    #write_to_file(m, "debug_cuts.lp")
+    MOI.set(m, MOI.LazyConstraintCallback(), lazycb)
+    
     optimize!(m)
     end_stat = termination_status(m)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
