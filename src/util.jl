@@ -37,7 +37,8 @@ function ini_ρ_h(data)
     return ρ_h
 end
 
-function calc_ub(ub, x, y, data)
+
+function calc_ub(x, y, data)
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -49,24 +50,19 @@ function calc_ub(ub, x, y, data)
     K = 1:data.k
     T = 1:data.t
 
-    term_1 = sum(F[j,k]*y[j,k] for j in J for k in K) 
-    term_2 = sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T)
-    term_3 = 0
-    for t in T
-        term_3_t = 0
-        for j in J
-            den_1 = 2*sum(Q[j,k]*y[j,k] for k in K)*(sum(Q[j,k]*y[j,k] for k in K)-sum(λ[i,t]*x[i,j,t] for i in I))
-            den_2 = sum(Q[j,k]*y[j,k] for k in K)
-            if den_1 != 0 && den_2 != 0
-                sum_temp = ((1+cv^2*sum(y[j,k] for k in K))*sum(λ[i,t]*x[i,j,t] for i in I)^2/(den_1))+
-                +(sum(λ[i,t]*x[i,j,t] for i in I)/den_2)
-                term_3_t += sum_temp
-            end        
-        end
-        term_3 += (D/sum(λ[i,t] for i in I))*term_3_t
-    end
-    new_ub = term_1 + term_2 + term_3
-    return minimum([ub, new_ub])
+    ρ = calc_new_ρ(x, y, data)
+    R = calc_new_R(ρ, data)
+    w, z = calc_new_w_z(x, y, R, ρ, data)
+
+    Fterm = dot(F, y)
+    Cterm = dot(C, x)
+
+    Dt = [data.D/sum(λ[i, t] for i in I) for t in T]
+    
+    last_term = 0.5 * sum(Dt[t] * (R[j, t] + ρ[j, t] + sum(data.cv^2 * (w[j, k, t] - z[j, k, t]) for k in K)) for j in J for t in T)
+
+    ub = Fterm + Cterm + last_term
+    return ub
 end
 
 function calc_ub(lb, ub, ρq, Rq, wq, data)
@@ -86,24 +82,35 @@ function calc_new_ρ(xq, yq, data)
     Q = data.Q    
     T = 1:data.t
 
-    ρ_new = Array{Float64}(undef,data.J,data.t)
-    for j in J
-        for t in T
-            num = sum(λ[i,t].*xq[i,j,t] for i in I)
-            den = sum(Q[j,k]*yq[j,k] for k in K)
-            if den != 0
-                ρ_new[j,t]=num/den
-            else
-                ρ_new[j,t]=0
-            end
+    ρ_new = zeros(data.J, data.t)
+    for j in J, t in T
+        num = sum(λ[i,t].*xq[i,j,t] for i in I)
+        den = sum(Q[j,k]*yq[j,k] for k in K)
+        if den != 0
+            ρ_new[j,t]=num/den
         end
     end
     return ρ_new
 end
 
+function calc_new_R(ρ, data)
+    R = zeros(data.J, data.t)
+    for j in 1:data.J, t in 1:data.t
+        R[j, t] = ρ[j, t] / (1 - ρ[j, t])
+    end
+    return R
+end
 
-
-
+function calc_new_w_z(x, y, R, ρ, data)
+    z = zeros(data.J, data.k, data.t)
+    w = zeros(data.J, data.k, data.t)
+    for j in 1:data.J, k in 1:data.k, t in 1:data.t
+        z[j, k, t] = ρ[j, t] * y[j, k]
+        w[j, k, t] = R[j, t] * y[j, k]
+    end
+    return w, z
+end
+    
 
 
 # Calculates the maximum dissimilarity between two figures

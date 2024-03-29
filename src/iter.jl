@@ -6,11 +6,10 @@ function cutting_plane(data, params, status, ρ_h)
     q = 0
 
     while (ub-lb)/ub >= params.ϵ
-        xq, yq, ρq, Rq, wq, lb = model_cuts(data, params, status, ρ_h)
-
-        ub = calc_ub(lb, ub, ρq, Rq, wq, data)
-
-        ρ_h = cat(ρ_h, ρq, dims=3)
+        xq, yq, ρ_q, Rq, wq, lb = model_cuts(data, params, status, ρ_h)
+        newub = calc_ub(xq, yq, data)
+        ub = min(ub, newub)
+        ρ_h = cat(ρ_h, ρ_q, dims=3)
         q+=1
         println("Iter $q: LB= $lb ; UB = $ub")
     end
