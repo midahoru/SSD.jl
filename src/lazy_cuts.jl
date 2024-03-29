@@ -1,4 +1,4 @@
-function model_lazy_cuts(data, params, status, ρ_h)
+function model_lazy_cuts(data, params, status)
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -10,7 +10,6 @@ function model_lazy_cuts(data, params, status, ρ_h)
     K = 1:data.k
     T = 1:data.t
     M = data.M
-    H = 1:size(ρ_h,3)
 
     Dt = [D/sum(λ[i, t] for i in I) for t in T]
     
@@ -50,49 +49,31 @@ function model_lazy_cuts(data, params, status, ρ_h)
     @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0, base_name = "c13")
     @constraint(m, [j in J, t in T], sum(z[j,k,t] for k in K) - ρ[j,t] == 0, base_name = "c15")
     @constraint(m, [j in J, t in T], sum(w[j,k,t] for k in K)-R[j,t] == 0, base_name = "c18")
-    @constraint(m, [j in J, t in T, h in H], (1-ρ_h[j,t,h])^2 * R[j,t] - ρ[j,t] >= -ρ_h[j,t,h]^2, base_name = "c16")
+    #@constraint(m, [j in J, t in T, h in H], (1-ρ_h[j,t,h])^2 * R[j,t] - ρ[j,t] >= -ρ_h[j,t,h]^2, base_name = "c16")
     # 14 - 17
     @constraint(m, [j in J, t in T, k in K], z[j,k,t] - y[j,k] <= 0, base_name = "c14")
     @constraint(m, [j in J, t in T, k in K], w[j,k,t] - M*y[j,k] <= 0, base_name = "c17")
     
     function lazycb(cb)
-        xvals = callback_value.(cb, x)
-        zvals = callback_value.(cb, z)
-        
-        # if callback_node_status(cb, m) == MOI.CALLBACK_NODE_STATUS_FRACTIONAL
-        #     return
-        # end
-        if callback_node_status(cb, m) == MOI.CALLBACK_NODE_STATUS_INTEGER
-            let
-                sol = maximum_weighted_clique(nnodes, unfeas, xvals, true) 
-                if sum(xvals[i] for i in sol) > 1+1e-7
-                    println("adding clique inequality of type I --------------------")
-                    con = @build_constraint(sum(x[u] for u in sol) <= 1)
-                    MOI.submit(m, MOI.LazyConstraint(cb), con)
-                    return
-                end
-            end
+        ρvals = callback_value.(cb, ρ)
+
+        if callback_node_status(cb, m) != MOI.CALLBACK_NODE_STATUS_INTEGER #MOI.CALLBACK_NODE_STATUS_FRACTIONAL # 
+            return
+        end
+
+        println("adding cut --------------------")
+        for j in J, t in T
+            con = @build_constraint((1-ρvals[j,t])^2 * R[j,t] - ρ[j,t] >= -ρvals[j,t]^2)
+            MOI.submit(m, MOI.LazyConstraint(cb), con)
         end
         
-        for k in K
-            weights = [xvals[i] + zvals[k] - 1 for i in I]
-            # sol = maximum_weighted_clique(nnodes, E_D[k:end], weights, false) # exact
-            if !isempty(E_D[1:k-1])
-                sol = maximum_weighted_clique(nnodes, E_D[1:k-1], weights, false) # heuristic                        
-                nsol = length(sol)
-                if nsol > 0 && sum(xvals[i] for i in sol) + (nsol - 1) * zvals[k] > nsol + 1e-1
-                    println("adding clique inequality of type II --------------------")
-                    con = @build_constraint(sum(x[i] for i in sol) + (nsol - 1) * z[k] <= nsol)
-                    MOI.submit(m, MOI.LazyConstraint(cb), con)
-                end
-            end
-        end
     end
 
     MOI.set(m, MOI.LazyConstraintCallback(), lazycb)
     
     optimize!(m)
     end_stat = termination_status(m)
+    println(end_stat)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
         status.endStatus = :optimal
         if end_stat == MOI.SOLUTION_LIMIT
@@ -100,11 +81,12 @@ function model_lazy_cuts(data, params, status, ρ_h)
         end
         xval = value.(x)
         yval = value.(y)
+        zval = value.(z)
         ρval = value.(ρ)
-        Rval = value.(R)
         wval = value.(w)
+        Rval = value.(R)
         optval = objective_value(m)
-        return xval, yval, ρval, Rval, wval, optval
-    else return [], [], [], [], [], objective_value(m)
+        return xval, yval, zval, ρval, wval, Rval, optval
+    else return [], [], [], [], [], [], 0
     end
 end

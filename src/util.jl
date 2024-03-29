@@ -65,12 +65,12 @@ function calc_ub(x, y, data)
     return ub
 end
 
-function calc_ub(lb, ub, ρq, Rq, wq, data)
+function calc_ub(lb, ρq, Rq, wq, data)
     Dt = [data.D/sum(data.a[i, t] for i in 1:data.I) for t in 1:data.t]
 
     new_ub = lb + sum(Dt[t]*(((ρq[j, t]/(1-ρq[j,t]))-Rq[j,t]) + data.cv^2*((ρq[j, t]/(1-ρq[j,t]))-
     sum(wq[j,k,t] for k in 1:data.k))) for j in 1:data.J for t in 1:data.t)
-    return minimum([ub, new_ub])
+    return new_ub
 end
 
 function calc_new_ρ(xq, yq, data)
@@ -110,13 +110,45 @@ function calc_new_w_z(x, y, R, ρ, data)
     end
     return w, z
 end
+
+function calc_big_M(data, ρ_h)
+    J = 1:data.J
+    T = 1:data.t
+    H = 1:size(ρ_h,3)
+
+    M = zeros(data.J, data.t)
+    for j in J, t in T
+        max_in_1 = 0
+        for h in H
+            value_in_1 = 1/(1-ρ_h[j,t,h])^2 -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2
+            if value_in_1 > max_in_1
+                max_in_1 = value_in_1
+            end
+        end
+        M[j,t]=max_in_1
+    end
+    return M
+end
+
+function calc_big_M_2(data, ρ_h)
+    J = 1:data.J
+    T = 1:data.t
+
+    M = zeros(data.J, data.t)
+    for j in J, t in T
+        max_ρ = maximum(ρ_h[j,t,:])
+        M[j,t]=1+ 1/(1-max_ρ)^2 -max_ρ^2/(1-max_ρ)^2
+    end
+    return M
+end 
+
     
 
 
-# Calculates the maximum dissimilarity between two figures
-function calc_max_diss(c1, d1, c2, d2, params)
-    return round(maximum(pairwise(euclidean, extreme_p_generator(c1, d1), extreme_p_generator(c2, d2))), digits = params.round_digits)
-end
+# # Calculates the maximum dissimilarity between two figures
+# function calc_max_diss(c1, d1, c2, d2, params)
+#     return round(maximum(pairwise(euclidean, extreme_p_generator(c1, d1), extreme_p_generator(c2, d2))), digits = params.round_digits)
+# end
 
 
 ################################################## miscellaneous

@@ -2,8 +2,8 @@ module SSD
 
     using Random 
     using Dates
-    using Alpine
-    using Ipopt
+    #using Alpine
+    #using Ipopt
     using Gurobi
     using JuMP
     using MathOptInterface
@@ -16,6 +16,7 @@ module SSD
     include("util.jl")
     include("non_linear.jl")
     include("cuts.jl")
+    include("lazy_cuts.jl")
     include("data.jl")
 
 end # module SSD

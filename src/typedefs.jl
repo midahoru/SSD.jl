@@ -35,14 +35,13 @@ end
 mutable struct SolverStatus
     initTime::DateTime
     endTime::DateTime
-    ok::Bool # if false, optimization has been aborted due to time limits
     endStatus::Symbol
     nIter::Int64
 end
 
-default_params() = Parameters(3*60*60, 10^-5, 4, MersenneTwister(0), MersenneTwister(15))
+default_params() = Parameters(3*60*60, 10^-6, 4, MersenneTwister(0), MersenneTwister(15))
 default_data() = Data(0, 0, Array{Float64,}(undef,0,0), Array{Float64}(undef,0,0), (0,1), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), Array{Float64}(undef,0,0,0),
  1, 1, 1, 1, 1, 1, 1000)
-init_solver_status() = SolverStatus(Dates.now(), Dates.now(), true, :none, 0)
+init_solver_status() = SolverStatus(Dates.now(), Dates.now(), :none, 0)

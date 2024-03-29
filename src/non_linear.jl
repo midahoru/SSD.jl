@@ -1,9 +1,3 @@
-#= using Alpine
-using Ipopt
-using Gurobi
-using JuMP
-using MathOptInterface =#
-
 function minlp(data, params, status)
     I = 1:data.I
     J = 1:data.J
@@ -70,8 +64,12 @@ function minlp(data, params, status)
         end
         xval = value.(x)
         yval = value.(y)
+        zval = value.(z)
+        ρval = value.(ρ)
+        wval = value.(w)
+        Rval = value.(R)        
         optval = objective_value(m)
-        return xval, yval, optval
-    else return [], [], objective_value(m)
+        return xval, yval, zval, ρval, wval, Rval, optval
+    else return [], [], [], [], [], [], 0
     end
 end
