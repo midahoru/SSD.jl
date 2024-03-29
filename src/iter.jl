@@ -2,7 +2,7 @@ function cuts_priori(data, params, status, ρ_h)
     # Initialize the bounds
     lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)
 
-    xq, yq = [], []
+    xq, yq, zq, ρq, wq, Rq = [], [], [], [], [], []
     q = 0
 
     while (ub-lb)/ub >= params.ϵ

@@ -61,7 +61,7 @@ function model_lazy_cuts(data, params, status)
             return
         end
 
-        println("adding cut --------------------")
+        #println("adding cut --------------------")
         for j in J, t in T
             con = @build_constraint((1-ρvals[j,t])^2 * R[j,t] - ρ[j,t] >= -ρvals[j,t]^2)
             MOI.submit(m, MOI.LazyConstraint(cb), con)
@@ -73,7 +73,6 @@ function model_lazy_cuts(data, params, status)
     
     optimize!(m)
     end_stat = termination_status(m)
-    println(end_stat)
     if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
         status.endStatus = :optimal
         if end_stat == MOI.SOLUTION_LIMIT
