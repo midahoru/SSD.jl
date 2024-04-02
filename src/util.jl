@@ -133,7 +133,6 @@ end
 function calc_big_M_2(data, ρ_h)
     J = 1:data.J
     T = 1:data.t
-
     M = zeros(data.J, data.t)
     for j in J, t in T
         max_ρ = maximum(ρ_h[j,t,:])

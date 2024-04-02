@@ -54,8 +54,8 @@ function model_cuts_priori(data, params, status, ρ_h)
     # 14 - 17
     @constraint(m, [j in J, t in T, k in K], z[j,k,t] - y[j,k] <= 0, base_name = "c14")
 
-    #M = calc_big_M(data, ρ_h)
-    M2 = calc_big_M_2(data, ρ_h)
+    M2 = calc_big_M(data, ρ_h)
+    #M2 = calc_big_M_2(data, ρ_h)
     #println("Calc M =$M2")
     #println("ρ_h = $ρ_h")
     @constraint(m, [j in J, t in T, k in K], w[j,k,t] - M2[j,t]*y[j,k] <= 0, base_name = "c17")
@@ -78,7 +78,7 @@ function model_cuts_priori(data, params, status, ρ_h)
         Rval = value.(R)
         optval = objective_value(m)
         return xval, yval, zval, ρval, wval, Rval, optval
-    else return [], [], [], [], [], [], 0
+    else return [], [], [], [], [], [], objective_value(m)
     end
 end
 

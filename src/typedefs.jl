@@ -39,7 +39,7 @@ mutable struct SolverStatus
     nIter::Int64
 end
 
-default_params() = Parameters(3*60*60, 10^-6, 4, MersenneTwister(0), MersenneTwister(15))
+default_params() = Parameters(3*60*60, 10^-5, 4, MersenneTwister(0), MersenneTwister(15))
 default_data() = Data(0, 0, Array{Float64,}(undef,0,0), Array{Float64}(undef,0,0), (0,1), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), 
 Array{Float64}(undef,0, 0), Array{Float64}(undef,0, 0), Array{Float64}(undef,0,0,0),

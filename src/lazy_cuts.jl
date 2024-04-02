@@ -65,6 +65,7 @@ function model_lazy_cuts(data, params, status)
         for j in J, t in T
             con = @build_constraint((1-ρvals[j,t])^2 * R[j,t] - ρ[j,t] >= -ρvals[j,t]^2)
             MOI.submit(m, MOI.LazyConstraint(cb), con)
+            status.nIter += 1
         end
         
     end
@@ -86,6 +87,6 @@ function model_lazy_cuts(data, params, status)
         Rval = value.(R)
         optval = objective_value(m)
         return xval, yval, zval, ρval, wval, Rval, optval
-    else return [], [], [], [], [], [], 0
+    else return [], [], [], [], [], [], objective_value(m)
     end
 end

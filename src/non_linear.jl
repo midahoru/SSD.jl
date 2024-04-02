@@ -70,6 +70,6 @@ function minlp(data, params, status)
         Rval = value.(R)        
         optval = objective_value(m)
         return xval, yval, zval, ρval, wval, Rval, optval
-    else return [], [], [], [], [], [], 0
+    else return [], [], [], [], [], [], objective_value(m)
     end
 end

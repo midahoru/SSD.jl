@@ -7,7 +7,7 @@ function cuts_priori(data, params, status, ρ_h)
 
     while (ub-lb)/ub >= params.ϵ
         xq, yq, zq, ρq, wq, Rq, lb = model_cuts_priori(data, params, status, ρ_h)
-        newub = calc_ub(xq, yq, data) # calc_ub(lb, ρq, Rq, wq, data)
+        newub = calc_ub(lb, ρq, Rq, wq, data)#calc_ub(xq, yq, data) # 
         ub = min(ub, newub)
         ρ_h = cat(ρ_h, ρq, dims=3)
         q+=1
