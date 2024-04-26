@@ -57,19 +57,25 @@ function minlp(data, params, status)
     
     optimize!(m)
     end_stat = termination_status(m)
-    if end_stat == MOI.OPTIMAL || end_stat == MOI.SOLUTION_LIMIT
+    if end_stat == MOI.OPTIMAL || end_stat == MOI.TIME_LIMIT || end_stat == MOI.ITERATION_LIMIT || end_stat == MOI.SOLUTION_LIMIT
         status.endStatus = :optimal
-        if end_stat == MOI.SOLUTION_LIMIT
+        if end_stat == MOI.TIME_LIMIT
             status.endStatus = :tlim
+        elseif end_stat == MOI.ITERATION_LIMIT
+            status.endStatus = :itlim
+        elseif end_stat == MOI.SOLUTION_LIMIT
+            status.endStatus = :sollim        
         end
         xval = value.(x)
         yval = value.(y)
         zval = value.(z)
         ρval = value.(ρ)
         wval = value.(w)
-        Rval = value.(R)        
+        Rval = value.(R)
         optval = objective_value(m)
         return xval, yval, zval, ρval, wval, Rval, optval
-    else return [], [], [], [], [], [], objective_value(m)
+    elseif end_stat == MOI.INFEASIBLE
+        status.endStatus = :infeasible        
     end
+    return [], [], [], [], [], [], 0
 end
