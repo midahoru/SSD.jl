@@ -19,6 +19,23 @@ function gen_costs(data, params, cost_levels)
     return round.(F_j3 .* cost_levels', digits=params.round_digits)
 end
 
+function solve_ssd(data, params, status, solve_method)
+    if solve_method == "nlp"
+        res = minlp(data, params, status)
+    elseif solve_method == "priori"
+        res = cuts_priori(data, params, status)
+    elseif solve_method == "lazy_cuts"
+        res = model_lazy_cuts(data, params, status)
+    # elseif solve_method == "submodular"
+    #     res = submodular(data, params, status)
+    # elseif solve_method == "quadratic"
+    #     res = quadratic(data, params, status)
+    end
+    return res
+end
+    
+
+
 
 
 ################################################## Linear model with cuts

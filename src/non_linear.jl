@@ -66,16 +66,18 @@ function minlp(data, params, status)
         elseif end_stat == MOI.SOLUTION_LIMIT
             status.endStatus = :sollim        
         end
-        xval = value.(x)
-        yval = value.(y)
-        zval = value.(z)
-        ρval = value.(ρ)
-        wval = value.(w)
-        Rval = value.(R)
-        optval = objective_value(m)
-        return xval, yval, zval, ρval, wval, Rval, optval
+        # xval = value.(x)
+        # yval = value.(y)
+        # zval = value.(z)
+        # ρval = value.(ρ)
+        # wval = value.(w)
+        # Rval = value.(R)
+        # optval = objective_value(m)
+        # return xval, yval, zval, ρval, wval, Rval, optval
+        return objective_value(m), objective_value(m)
     elseif end_stat == MOI.INFEASIBLE
         status.endStatus = :infeasible        
     end
-    return [], [], [], [], [], [], 0
+    # return [], [], [], [], [], [], 0
+    return 0, 0
 end

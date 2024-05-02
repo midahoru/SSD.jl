@@ -1,8 +1,10 @@
-function cuts_priori(data, params, status, ρ_h)
+function cuts_priori(data, params, status)    
+
     # Initialize the bounds
     lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)
 
     xq, yq, zq, ρq, wq, Rq = [], [], [], [], [], []
+    ρ_h = ini_ρ_h(data)
     q = 0
 
     while (ub-lb)/ub >= params.ϵ
@@ -22,5 +24,6 @@ function cuts_priori(data, params, status, ρ_h)
     end
     status.nIter = q
 
-    return xq, yq, zq, ρq, wq, Rq, lb, ub
+    # return xq, yq, zq, ρq, wq, Rq, lb, ub
+    return lb, ub
 end
