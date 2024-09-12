@@ -1,4 +1,4 @@
-function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_iter = 100, max_iter_no_impro = 10)
+function heur_nelder_mead(data, params, status, y_ix, all_sols=Dict(), max_iter = 100, max_iter_no_impro = 10)
     eps = 1e-2                   # tolerance for stopping criterion
     α = 1  #0.1 #                      # reflection scale (>0)
     γ = 2  #1.5 #                      # expansion scale (>1)
@@ -19,13 +19,13 @@ function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_ite
         # all_sols = Dict()
         # all_sols[[0 for i in 1:data.J]] = 10e5*(sum(data.F)+sum(data.C)+data.D*sum(data.a))
 
-        GRB_ENV = Gurobi.Env()
+        # GRB_ENV = Gurobi.Env()
         int_y_ind = [data.k for j in 1:data.J]
         int_y = gen_y(data, int_y_ind)
         μ = 0
         primals = Dict()
         for t in 1:data.t
-            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ)
+            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status)
         end 
 
         index_to_look_for = 1:size(y_ix)[1]
@@ -44,7 +44,7 @@ function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_ite
                     of_sp = all_sols[y_ind]
                 else
                     println("----- Solving SP for $y_ind -----")
-                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ind, data, ρ_h, primals, μ, GRB_ENV)
+                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ind, data, ρ_h, primals, μ, true)
                     of_sp = Scost + Ccost + Congcost
                     all_sols[y_ind] = of_sp
                     # all_sols, y_ind, of_sp = search_y_same_sol(y_ind, x_k, data, all_sols)
@@ -79,7 +79,7 @@ function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_ite
             if y_ref in keys(all_sols)
                 of_sp_ref = all_sols[y_ref]
             else
-                res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ref, data, ρ_h, primals, μ, GRB_ENV)
+                res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ref, data, ρ_h, primals, μ, true)
                 of_sp_ref = Scost + Ccost + Congcost                
                 all_sols[y_ref] = of_sp_ref
                 if res_calc
@@ -106,7 +106,7 @@ function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_ite
                 if y_exp in keys(all_sols)
                     of_sp_exp = all_sols[y_exp]
                 else
-                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_exp, data, ρ_h, primals, μ, GRB_ENV)
+                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_exp, data, ρ_h, primals, μ, true)
                     of_sp_exp = Scost + Ccost + Congcost
                     all_sols[y_exp] = of_sp_exp
                     if res_calc
@@ -143,7 +143,7 @@ function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_ite
                 if y_con in keys(all_sols)
                     of_sp_con = all_sols[y_con]
                 else
-                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_con, data, ρ_h, primals, μ, GRB_ENV)
+                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_con, data, ρ_h, primals, μ, true)
                     of_sp_con = Scost + Ccost + Congcost
                     all_sols[y_con] = of_sp_con
                     if res_calc
@@ -189,153 +189,15 @@ function heur_nelder_mead_y(data, params, status, y_ix, all_sols=Dict(), max_ite
         best_argmin = argmin(all_sols)
         # res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_sol[1], data, ρ_h, primals, μ, GRB_ENV)
         # return  best_sol[2], Scost, Ccost, Congcost, best_sol[1], x_k
-        res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, ρ_h, primals, μ, GRB_ENV)
+        res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, ρ_h, primals, μ, true)
         return  all_sols[best_argmin], Scost, Ccost, Congcost, best_argmin, x_k
     
     end
     
     best_argmin = argmin(all_sols)
-    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, ρ_h, primals, μ, GRB_ENV)
+    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, ρ_h, primals, μ, true)
     return  all_sols[best_argmin], Scost, Ccost, Congcost, best_argmin, x_k
 end
-
-# Local search, changing vector when improved
-# function heur_local_search(data, params, status, max_iter = 100, max_iter_no_impro = 10,
-#     max_iter_look_new = 5, op_up = 1, op_down = -1)
-
-#     timer = Timer(params.max_time - elapsed(status))
-
-#     while true
-#         isopen(timer) || break
-#         yield()
-
-#         y_ind = repeat([data.k], data.J)
-#         indexes = collect(1:data.J)
-#         ρ_h = ini_ρ_h(data)
-#         GRB_ENV = Gurobi.Env()
-
-#         iter = 0
-#         iter_no_imp = 0
-
-#         all_sols = Dict()
-
-#         best_min, ρ_k, x_k = calc_cost_sp(y_ind, data, ρ_h, GRB_ENV)
-#         all_sols[y_ind]=best_min
-#         all_sols, y_ind = search_y_same_sol(y_ind, x_k, data, all_sols)
-#         ρ_h = cat(ρ_h, ρ_k, dims=3)
-
-#         while iter < max_iter && iter_no_imp < max_iter_no_impro
-#             println("Starting iter $iter")
-#             # Randomly shuffle the indexes
-#             rand_ind = shuffle(indexes)
-#             # Random indexes to change
-#             # ind_change = rand_ind[1:rand(indexes)]
-#             ind_change = rand_ind
-            
-#             # Select index based on workload
-            
-#             # y_test = deepcopy(y_ind) 
-            
-#             dem_j = [[sum(data.a[i,t]*x_k[i,j,t] for i in 1:data.I)  for t in 1:data.t] for j in 1:data.J]
-#             max_dems = []
-#             for j in 1:data.J
-#                 append!(max_dems, maximum(dem_j[j]))
-#             end
-
-#             ind_change = [ind for ind in ind_change if y_ind[ind] > 0 && data.Q[ind, y_ind[ind]] > max_dems[ind]]
-#             ind_full = [[ind for ind in ind_change if y_ind[ind] > 0 && data.Q[ind, y_ind[ind]] == max_dems[ind]]]
-            
-#             iter_change = 0
-#             keep_changing = true
-#             while iter_change < max_iter_look_new && keep_changing
-#                 println("Changing the initial y $y_ind at indexes $ind_change")
-#                 y_test = deepcopy(y_ind)
-#                 n_changes = 0
-#                 for ind_i in eachindex(ind_change)
-#                     ind = ind_change[ind_i]
-#                     is_last = false
-#                     # If the last
-#                     if ind_i == size(ind_change,1)
-#                         is_last = true
-#                     end
-
-#                     # # If the max cap, then randomly leave it as it is or decrease
-#                     # if y_test[ind] == data.k
-#                     #     if is_last && n_changes == 0
-#                     #         op = op_down
-#                     #         n_changes += 1
-#                     #     else
-#                     #         op = rand([0,op_down])
-#                     #         if op == op_down
-#                     #             n_changes += 1
-#                     #         end
-#                     #     end
-#                     #     # y_test[ind] += op
-#                     # # If closed, then randomly leave it as it is or increase
-#                     # elseif y_test[ind] == 0            
-#                     #     if is_last && n_changes == 0
-#                     #         op = op_up
-#                     #         n_changes += 1
-#                     #     else
-#                     #         op = rand([op_up,0])
-#                     #         if op == op_up
-#                     #             n_changes += 1
-#                     #         end
-#                     #     end
-#                     #     # y_test[ind] += op
-#                     # # Else, randomly increase or decrease cap
-#                     # else
-#                     #     op = rand([op_up, op_down])
-#                     #     n_changes += 1
-#                     # end
-
-#                     y_test[ind] += op
-#                     println("Y_test $y_test")
-#                     # if !(y_test in keys(all_sols))
-#                     #     keep_changing = false
-#                     #     println("Vector found is $y_test")
-#                     #     break
-#                     # else
-#                     #     iter_change += 1
-#                     # end
-#                 end
-#                 if !(y_test in keys(all_sols))
-#                     keep_changing = false
-#                     println("Vector found is $y_test")
-#                 else
-#                     iter_change += 1
-#                 end
-#             end
-#             if !keep_changing 
-#                 println("Cost to be calculated for $y_test")   
-
-#                 new_cost, ρ_k, x_k = calc_cost_sp(y_test, data, ρ_h, GRB_ENV)
-#                 all_sols[y_test] = new_cost                
-#                 all_sols, y_test = search_y_same_sol(y_test, x_k, data, all_sols)
-
-#                 ρ_h = cat(ρ_h, ρ_k, dims=3)
-#                 if new_cost < best_min
-#                     println("New best is $y_test")
-#                     best_min = new_cost
-#                     y_ind = y_test
-#                     iter_no_imp = 0
-#                 else
-#                     iter_no_imp += 1
-#                 end
-#             end
-#             iter += 1
-#             if data.k^data.J == length(keys(all_sols))
-#                 iter = max_iter
-#             end
-#         end
-#         status.nIter = iter
-#         println("Iters $iter, $iter_no_imp")
-#         return  best_min, y_ind
-        
-#     end 
-#     return  best_min, y_ind   
-#     println("Iters $iter, $iter_no_imp")
-# end
 
 function heur_local_search(data, params, status, max_iter = 100, max_iter_no_impro = 10,
     op_up = 1, op_down = -1, α1 = 70, α2 = 10)
@@ -346,14 +208,23 @@ function heur_local_search(data, params, status, max_iter = 100, max_iter_no_imp
         isopen(timer) || break
         yield()
 
-        best_y_ind = repeat([data.k], data.J)
+        
         # indexes = collect(1:data.J)
         ρ_h = ini_ρ_h(data)
-        GRB_ENV = Gurobi.Env()
+        # GRB_ENV = Gurobi.Env()
         
         all_sols = Dict()
 
-        res_calc, Scost, Ccost, Congcost, ρ_k, best_x_k = calc_cost_sp(best_y_ind, data, ρ_h, primals, μ, GRB_ENV)
+        best_y_ind = [data.k for j in 1:data.J]
+        int_y = gen_y(data, best_y_ind)
+        μ = 0
+        primals = Dict()
+        for t in 1:data.t
+            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status)
+        end 
+
+
+        res_calc, Scost, Ccost, Congcost, ρ_k, best_x_k = calc_cost_sp(best_y_ind, data, ρ_h, primals, μ, true)
         best_cost = Scost + Ccost + Congcost
         all_sols[best_y_ind] = best_cost
         # all_sols, best_y_ind, best_cost = search_y_same_sol(best_y_ind, best_x_k, data, all_sols)
@@ -372,7 +243,7 @@ function heur_local_search(data, params, status, max_iter = 100, max_iter_no_imp
             println("Starting iter $iter")
 
             if !(test_y_ind in keys(all_sols))
-                res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(test_y_ind, data, ρ_h, primals, μ, GRB_ENV)
+                res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(test_y_ind, data, ρ_h, primals, μ, true)
                 new_cost = Scost + Ccost + Congcost
                 all_sols[test_y_ind] = new_cost
                 # all_sols, test_y_ind, new_cost = search_y_same_sol(test_y_ind, x_k, data, all_sols)
@@ -430,7 +301,7 @@ function heur_local_search_first_best(data, params, status, max_iter = 100, max_
         μ = 0
         primals = Dict()
         for t in 1:data.t
-            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ)
+            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status)
         end 
 
         iter = 0
@@ -439,7 +310,7 @@ function heur_local_search_first_best(data, params, status, max_iter = 100, max_
         all_sols = Dict()
         all_sols_detailed = Dict()
 
-        res_calc, Scost, Ccost, Congcost, ρ_k, x_ind = calc_cost_sp(y_ind, data, ρ_h, primals, μ, GRB_ENV)
+        res_calc, Scost, Ccost, Congcost, ρ_k, x_ind = calc_cost_sp(y_ind, data, ρ_h, primals, μ, true)
         best_min = Scost + Ccost + Congcost
         all_sols[y_ind]=best_min
         all_sols_detailed[y_ind]  = [Scost, Ccost, Congcost, x_ind] 
@@ -471,7 +342,7 @@ function heur_local_search_first_best(data, params, status, max_iter = 100, max_
                     y_test[j] += op
                     println("Test $y_test")
                     if !(y_test in keys(all_sols))
-                        res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_test, data, ρ_h, primals, μ, GRB_ENV)
+                        res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_test, data, ρ_h, primals, μ, true)
                         new_cost = Scost + Ccost + Congcost
                         all_sols[y_test] = new_cost
                         all_sols_detailed[y_test]  = [Scost, Ccost, Congcost, x_k]                       

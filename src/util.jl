@@ -35,7 +35,7 @@ function solve_ssd(data, params, status, solve_method)
 
     elseif solve_method == "lazy_cuts"
         of, of_term1, of_term2, of_term3, y, x = model_lazy_cuts(data, params, status)
-        return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), y, x, status.endStatus #convert_y_to_print(y.data, data), x.data
+        return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus #convert_y_to_print(y.data, data), x.data
 
     elseif solve_method == "benders"
         of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub  = model_benders(data, params, status)
@@ -76,7 +76,7 @@ function solve_ssd(data, params, status, solve_method)
 
     
     elseif solve_method == "heur_NM"
-        of, Scost, Ccost, Congcost, best_y, best_x = heur_nelder_mead_y(data, params, status, ini_y(data), Dict(), 1000, 50)    
+        of, Scost, Ccost, Congcost, best_y, best_x = heur_nelder_mead(data, params, status, ini_y(data), Dict(), 1000, 50)    
         return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(Scost, digits=params.round_digits), round(Ccost, digits=params.round_digits), round(Congcost, digits=params.round_digits), best_y, best_x, status.endStatus
 
     elseif solve_method == "heur_LS"
@@ -217,13 +217,14 @@ end
 
 ################################################## Nelder-Mead
 # Cost of the Subproblem
-function calc_cost_sp(y, data, ρ_h, primals, μ)
+function calc_cost_sp(y0, data, ρ_h, primals, μ, gen_yb = false)
     ρ_k = Array{Float64}(undef,data.J,data.t)
     M = calc_big_M(data, ρ_h) 
 
     x = zeros(data.I, data.J, data.t)
 
-    # y = gen_y(data, y_ind)
+    y = gen_yb == true ? gen_y(data, y0) : y0
+
     # Check total capacity of 1st stage variables
     if dot(data.Q, y) < maximum(sum(data.a,dims=1))
         non_opt_val = 10e5*(sum(data.F)+sum(data.C)+data.D*sum(data.a))
@@ -397,7 +398,7 @@ function perturb_y(y_ind, data, params, status, all_sols, op_down, op_up)
             if !(y_test in keys(all_sols))
                 y_ini = ini_y(data)
                 y_ini[end]=y_test
-                of_ret, y_ret = heur_nelder_mead_y(data, params, status, y_ini, all_sols, 20, 5)
+                of_ret, _Scost, _Ccost, _Congcost, y_ret, x_ret = heur_nelder_mead(data, params, status, y_ini, all_sols, 20, 5)
                 if !(y_ret in keys(all_sols))
                     println("Vector perturbed using NM from $y_test to $y_ret")
                     return y_ret
@@ -626,12 +627,12 @@ function convert_y_to_print(y, data)
     y_cap = []
     for j in 1:data.J
         # Use in case of continuous y
-        append!(y_cap,0)
-        # if sum(y[j,:]) > 0.1
-        #     append!(y_cap,findfirst(>=(0.9), y[j,:]))
-        # else
-        #     append!(y_cap,0)
-        # end
+        # append!(y_cap,0)
+        if sum(y[j,:]) > 0.1
+            append!(y_cap,findfirst(>=(0.9), y[j,:]))
+        else
+            append!(y_cap,0)
+        end
     end
     return y_cap
 end
