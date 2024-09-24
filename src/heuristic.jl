@@ -1,4 +1,4 @@
-function heur_nelder_mead(data, params, status, y_ix, all_sols=Dict(), max_iter = 100, max_iter_no_impro = 10)
+function heur_nelder_mead(primals, μ,  data, params, status, y_ix, GRB_ENV, all_sols=Dict(), max_iter = 100, max_iter_no_impro = 10)
     eps = 1e-2                   # tolerance for stopping criterion
     α = 1  #0.1 #                      # reflection scale (>0)
     γ = 2  #1.5 #                      # expansion scale (>1)
@@ -19,14 +19,14 @@ function heur_nelder_mead(data, params, status, y_ix, all_sols=Dict(), max_iter 
         # all_sols = Dict()
         # all_sols[[0 for i in 1:data.J]] = 10e5*(sum(data.F)+sum(data.C)+data.D*sum(data.a))
 
-        # GRB_ENV = Gurobi.Env()
+        
         int_y_ind = [data.k for j in 1:data.J]
         int_y = gen_y(data, int_y_ind)
-        μ = 0
-        primals = Dict()
-        for t in 1:data.t
-            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status)
-        end 
+        # μ = 0
+        # primals = Dict()
+        # for t in 1:data.t
+        #     primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status, GRB_ENV)
+        # end 
 
         index_to_look_for = 1:size(y_ix)[1]
 
@@ -190,7 +190,7 @@ function heur_nelder_mead(data, params, status, y_ix, all_sols=Dict(), max_iter 
         # res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_sol[1], data, ρ_h, primals, μ, GRB_ENV)
         # return  best_sol[2], Scost, Ccost, Congcost, best_sol[1], x_k
         res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, ρ_h, primals, μ, true)
-        return  all_sols[best_argmin], Scost, Ccost, Congcost, best_argmin, x_k
+        return  all_sols[best_argmin], Scost, Ccost, Congcost, best_argmin, x_k, y_ix
     
     end
     

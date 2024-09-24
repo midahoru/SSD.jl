@@ -39,7 +39,7 @@ function solve_ssd(data, params, status, solve_method)
 
     elseif solve_method == "benders"
         of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub  = model_benders(data, params, status)
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub
+        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub
         # return of, of, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut      
 
     elseif solve_method == "bendersWS1"
@@ -239,13 +239,9 @@ function calc_cost_sp(y0, data, ρ_h, primals, μ, gen_yb = false)
         
         for t in 1:data.t
             primal_sp = primals[t]
-            primal_sp = update_primal(primal_sp, data, y, M, t, μ, ρ_h)
-            sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, sp_val, Cterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = benders_sp_primal(primal_sp, data, ρ_h, t)
-
-            # Add cuts for the linear approximation
-            # primal_sp = add_cuts(primal_sp, sp_ρval, ρ_h, data, t, μ)
-
-            # sp_stat, sp_val, of_term2, of_term3,  ρval, xval = heur_sp(y, data, ρ_h, t, GRB_ENV)
+            primal_sp = update_sp_primal(primal_sp, data, y, M, t, μ, ρ_h)
+            sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, sp_val, Cterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = solve_benders_sp_primal(primal_sp, data, ρ_h, t)
+            
             if sp_stat == MOI.OPTIMAL
                 ρ_k[:,t] = sp_ρval  
                 x[:,:,t] = sp_xval       
@@ -422,8 +418,6 @@ end
 
 
 # Initial vertices of the simplex
-# All open exept 1dd
-# All at half cap
 function ini_y(data)
     vecs = []
     for i in 1:data.J

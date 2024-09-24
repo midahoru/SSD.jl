@@ -66,12 +66,16 @@ function model_benders_iter(data, params, status, types=["Gral"])
         # Initialize linear relaxation of the master problem
         mp = ini_lp_benders(data, params, status)
 
+        # Gurobi environments
+        GRB_ENV_primals = Gurobi.Env()
+
         # Initialize the primal subproblems
         primals = Dict()
         int_y_ind = [data.k for j in J]
         int_y = gen_y(data, int_y_ind)
+        # Initialize all the subproblems (one per period)
         for t in T
-            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status)
+            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status,GRB_ENV_primals)
         end 
 
         # Initial interior point
@@ -92,10 +96,10 @@ function model_benders_iter(data, params, status, types=["Gral"])
             last_bounds = append!(last_bounds, of_lp)[2:end]
             conv = last_bounds[end]-last_bounds[begin] <= τ*last_bounds[end] ? true : false
             
-            println("First OF $(last_bounds[begin]) / last OF $of_lp")
-            println("Convergeance is $conv because ϵ=$((last_bounds[end]-last_bounds[begin])/last_bounds[end])")
-            println("Yvals = $yvals_lp")
-            println("αvals = $αvals_lp")
+            # println("First OF $(last_bounds[begin]) / last OF $of_lp")
+            # println("Convergeance is $conv because ϵ=$((last_bounds[end]-last_bounds[begin])/last_bounds[end])")
+            # println("Yvals = $(yvals_lp.data)")
+            # println("αvals = $(αvals_lp.data)")
             
             mp, primals, ρ_h, cost_sp, update_bounds, xvals, ρvals, Rvals, wvals, zvals, _first_it_MW, _int_y  = separate_cuts(mp, yvals_lp, αvals_lp, primals, ρ_h, μ, [], data, status)
             
@@ -112,9 +116,9 @@ function model_benders_iter(data, params, status, types=["Gral"])
 
             lb_iter[status.nIter] = lb
             ub_iter[status.nIter] = ub
-            if 29 <= status.nIter <= 31
-                write_to_file(mp, "lp_relax_$(status.nIter).lp")
-            end
+            # if 29 <= status.nIter <= 31
+            #     write_to_file(mp, "lp_relax_$(status.nIter).lp")
+            # end
         end
 
         # print("Yvals rel = $yvals_lp")
@@ -127,7 +131,7 @@ function model_benders_iter(data, params, status, types=["Gral"])
 
         set_start_value.(mp[:y], ceil.(yvals_lp))
 
-        # Initialize all the subproblems (one per period)
+        
         if "SH" in types # =="SH"
             μ = 10e-6
         end
@@ -141,7 +145,7 @@ function model_benders_iter(data, params, status, types=["Gral"])
         println("\n---- STARTING BRANCHING ----")
         println(" $(status.nIter) iterations so far")
         println("Starting with bounds lb=$lb and ub=$ub\n")
-        while (ub-lb)/ub >= 10e-4 && lb + 10e-5 < ub && status.nIter < 300  # (ub-lb)/ub >= params.ϵ
+        while (ub-lb)/ub >= 10e-4 && lb + 10e-5 < ub && status.nIter < 125  # (ub-lb)/ub >= params.ϵ
 
             if "PK" in types
                 τ_PK = 0.5
@@ -196,7 +200,10 @@ function model_benders_iter(data, params, status, types=["Gral"])
             # # if update_bounds
             # if ub >= dot(F, yvals) + cost_sp #&& update_bounds
                 println("UB updated to $ub")
+                
+                
                 ub = dot(F, yvals) + cost_sp
+                # set_normalized_rhs(mp[:mp_ub], ub) #cost_sp)
                 Fterm = dot(F, yvals)
                 Cterm = dot(C, xvals)  
                 Congterm = 0.5*sum(Dt[t] * (Rvals[j, t] + ρvals[j, t] + sum(cv^2 * (wvals[j, k, t] - zvals[j, k, t]) for k in K)) for j in J for t in T)                
@@ -253,7 +260,7 @@ function model_benders_iter(data, params, status, types=["Gral"])
 end
 
 
-function ini_mp_benders(data, params, status, types) 
+function ini_mp_benders2(data, params, status, types) 
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -351,7 +358,7 @@ function ini_mp_benders(data, params, status, types)
     return mp
 end
 
-function benders_mp(m)
+function benders_mp2(m)
     optimize!(m)
     end_stat = termination_status(m)
     yval = value.(m[:y])
@@ -366,7 +373,7 @@ function benders_mp(m)
     end       
 end
 
-function ini_lp_benders(data, params, status)
+function ini_lp_benders2(data, params, status)
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -417,10 +424,13 @@ function ini_lp_benders(data, params, status)
     # the cost of allocating each node to the least expensive facility (closest one)
     @constraint(lp, [t in T], α[t] >= floor(sum([minimum(C[i,:,t]) for i in I])), base_name="c_lp_3")
 
+    # @constraint(lp, mp_α_ub, sum(α[t] for t in T) <= sum(data.F)+sum(data.C)+data.D*sum(data.a))
+    # @constraint(lp, mp_ub, of_lp + α_lp <= sum(data.F)+sum(data.C)+data.D*sum(data.a))
+
     return lp
 end
 
-function separate_cuts(m, yvals, αvals, primals, ρ_h, μ, types, data, status, first_it_MW=false, int_y=[], w_fc=0)
+function separate_cuts2(m, yvals, αvals, primals, ρ_h, μ, types, data, status, first_it_MW=false, int_y=[], w_fc=0)
     xvals = Array{Float64}(undef, data.I, data.J, data.t)
     ρvals = Array{Float64}(undef, data.J, data.t)    
     Rvals = Array{Float64}(undef, data.J, data.t)    
