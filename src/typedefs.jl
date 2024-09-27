@@ -25,12 +25,6 @@ mutable struct Data
     M::Int64
 end
 
-mutable struct FeasibleSolution
-    coords::Matrix{Float64}
-    caps::Vector{Float64}
-end
-
-
 mutable struct SolverStatus
     initTime::DateTime
     endTime::DateTime

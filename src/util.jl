@@ -67,7 +67,7 @@ function solve_ssd(data, params, status, solve_method)
         return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub
 
     elseif solve_method == "bendersIter"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes  = model_benders_iter(data, params, status, ["PK"])
+        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes  = model_benders_iter(data, params, status)
         return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes
 
     elseif solve_method == "bendersIterPK"
@@ -93,14 +93,11 @@ end
 
 
 ################################################## Linear model with cuts
-function ini_ρ_h(data)
+function ini_ρ_h(data, n=9)
     J = 1:data.J 
     T = 1:data.t
-    # eps = 10e-5
-    # n = 100
-    # ini_ρ_h = collect(range(0+eps,1-eps, length=n))
 
-    ini_ρ_h = collect(range(0.1,step=0.1,0.9))
+    ini_ρ_h = collect(range(0.1,step=1/(n+1),0.9))
     H = 1:length(ini_ρ_h)
     ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
 
@@ -217,7 +214,7 @@ end
 
 ################################################## Nelder-Mead
 # Cost of the Subproblem
-function calc_cost_sp(y0, data, ρ_h, primals, μ, gen_yb = false)
+function calc_cost_sp(y0, data, ρ_h, primals, μ, n_outter_cuts, gen_yb = false)
     ρ_k = Array{Float64}(undef,data.J,data.t)
     M = calc_big_M(data, ρ_h) 
 
@@ -226,31 +223,33 @@ function calc_cost_sp(y0, data, ρ_h, primals, μ, gen_yb = false)
     y = gen_yb == true ? gen_y(data, y0) : y0
 
     # Check total capacity of 1st stage variables
-    if dot(data.Q, y) < maximum(sum(data.a,dims=1))
+    if dot(data.Q, y) <= maximum(sum(data.a,dims=1))
         non_opt_val = 10e5*(sum(data.F)+sum(data.C)+data.D*sum(data.a))
         return false, non_opt_val, non_opt_val, non_opt_val, ρ_k, x    
     else
-        # Set-up cost
-        Scost = dot(data.F, y)
+        # Location cost
+        Loccost = dot(data.F, y)
         # Assignation cost
-        Ccost = 0
+        Allocost = 0
         # Congestion cost
         Congcost = 0
+
+        Allocost, Congcost, xval_sp, ρval_sp, Rval_sp, wval_sp, zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, y, ρ_h, n_outter_cuts, μ)
         
         for t in 1:data.t
-            primal_sp = primals[t]
-            primal_sp = update_sp_primal(primal_sp, data, y, M, t, μ, ρ_h)
-            sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, sp_val, Cterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = solve_benders_sp_primal(primal_sp, data, ρ_h, t)
+
+            # sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, Alloterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = solve_benders_sp_primal(primals[t], data, ρ_h, t, n_outter_cuts)
+            sp_stat = all_sp_stat[t]
             
             if sp_stat == MOI.OPTIMAL
-                ρ_k[:,t] = sp_ρval  
-                x[:,:,t] = sp_xval       
+                ρ_k[:,t] = ρval_sp[t]  
+                x[:,:,t] = xval_sp[t]       
             end
-            # Add costs
-            Ccost += Cterm
-            Congcost += Congterm
+            # # Add costs
+            # Allocost += Alloterm
+            # Congcost += Congterm
         end
-        return true, Scost, Ccost, Congcost, ρ_k, x
+        return true, Loccost, Allocost, Congcost, ρ_k, x
     end
 end
 
