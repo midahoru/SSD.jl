@@ -48,16 +48,19 @@ params = SSD.default_params()
 data = SSD.default_data()
 
 
+
+
 # Read the instance to solve
-filename = "instances/instance_name.txt"
-SSD.read_instance(filename, data)
+directory = "instances/Own/"
+filename= "1.txt"
+SSD.read_file(filename, data)
 
 # Define the different cost levels
 cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
-data.F = gen_costs(data, params, cost_levels)
+data.F = SSD.gen_costs(data, params, cost_levels)
 # Define the different capacity levels
 cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
-data.Q = gen_caps(data, params, cap_levels)
+data.Q = SSD.gen_caps(data, params, cap_levels)
 
 status = SSD.init_solver_status()
 
