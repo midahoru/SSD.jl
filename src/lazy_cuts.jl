@@ -122,5 +122,7 @@ function model_lazy_cuts(data, params, status)
         # Rval = value.(R)
         # optval = objective_value(m)
         # return xval, yval, zval, ρval, wval, Rval, optval
-    return objective_value(m), value(of_term1), value(of_term2), value(of_term3), value.(y), value.(x)
+    test_cap, test_cap_sel, test_alloc = is_sol_feas(data, value.(y).data, value.(x).data)
+
+    return objective_value(m), value(of_term1), value(of_term2), value(of_term3), value.(y), value.(x), test_cap, test_cap_sel, test_alloc
 end

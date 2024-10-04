@@ -24,7 +24,7 @@ function instance_gen(id, type, nI, nJ, coords_bounds, a_bounds, r_bounds, cv, D
     r = round.(rand(params.rng, Uniform(r_bounds[1], r_bounds[2]), nI, nJ, t),
     digits=params.round_digits)
     C = round.(r .* dist, digits=params.round_digits)  
-    println(dist) 
+    # println(dist) 
 
     # write_file(nI, nJ, coords_bounds, cv, D, k, t, FLR, FCR, a, a_bounds, r_bounds, Icoords, Jcoords, C)
     write_file(id, type, nI, nJ, Icoords, Jcoords, cv, D, k, t, FLR, FCR, a, C, dist)

@@ -13,7 +13,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
 
         # Initial data
         # y_ix = ini_y(data)
-        ρ_h = ini_ρ_h(data)
+        ρ_h = ini_ρ_h(data, n_outter_cuts)
 
         sol_vert = Dict()
         # all_sols = Dict()
@@ -36,14 +36,14 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
         while iter <= max_iter && iter_no_imp <= max_iter_no_impro
             iter += 1
             println()
-            println("----------------Starting iter $iter --------------------------")       
+            # println("----------------Starting iter $iter --------------------------")       
             for ind in index_to_look_for
                 y_ind = y_ix[ind]
                 if y_ind in keys(all_sols)
-                    println("----- Retrieving sol for $y_ind -----")
+                    #println("----- Retrieving sol for $y_ind -----")
                     of_sp = all_sols[y_ind]
                 else
-                    println("----- Solving SP for $y_ind -----")
+                    #println("----- Solving SP for $y_ind -----")
                     res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ind, data, ρ_h, primals, μ, n_outter_cuts, true)
                     of_sp = Scost + Ccost + Congcost
                     all_sols[y_ind] = of_sp
@@ -92,7 +92,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
             ## Reflection: If reflection is better than the 2nd worst, but not the best:
             # if minimum(values(sol_vert)) <= of_sp_ref &&  of_sp_ref < sort(collect(values(sol_vert)))[end-1]
             if sol_vert[keys_sorted_sols_vert[1]] <= of_sp_ref < sol_vert[keys_sorted_sols_vert[end-1]]
-                println("####### Reflection #######")
+                #println("####### Reflection #######")
                 # y_ref_new = calc_new_y(all_sols, y_ref, y_ix[id_not])
                 y_ix[id_not] = y_ref
                 iter_no_imp = 0
@@ -117,12 +117,12 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
                 
                 # Select the new vertex comparing expanded and reflected
                 if of_sp_exp < of_sp_ref
-                    println("####### Expansion #######")
+                    #println("####### Expansion #######")
                     # y_ix[id_not] = calc_new_y(all_sols, y_exp, y_ix[id_not])
                     y_ix[id_not] = y_exp
                     iter_no_imp = 0
                 else
-                    println("####### Reflection 2 #######")
+                    #println("####### Reflection 2 #######")
                     # y_ix[id_not] = calc_new_y(all_sols, y_ref, y_ix[id_not])
                     y_ix[id_not] = y_ref
                     iter_no_imp = 0
@@ -154,7 +154,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
 
                 # Select the new vertex comparing contracted and reflected
                 if of_sp_con < all_sols[y_reference] # Since we can be sure it has been already calculated
-                    println("####### Contraction #######")
+                    #println("####### Contraction #######")
                     y_ix[id_not] = y_con
                     iter_no_imp = 0
                     # y_ix[id_not] = calc_new_y(all_sols, y_con, y_ix[id_not])                
@@ -162,7 +162,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
                 else
                     index_to_look_for = []
                     ind_best = keys_sorted_sols_vert[1]
-                    println("####### Shrink #######")                    
+                    #println("####### Shrink #######")                    
                     iter_no_imp += 1
                     for ind in 1:size(y_ix)[1]
                         if ind != ind_best
@@ -175,7 +175,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
                                 rand_ad_k = rand(-max_rand:max_rand, data.J)
                                 # y_replace_shrink = [k+r_k <= data.k ? k+r_k : k+r_k-1 <= data.k ? k+r_k-1 : k for (k,r_k) in zip(y_ix[ind_best],rand_ad_k)]
                                 y_replace_shrink = [0 <= k+r_k <= data.k ? k+r_k : k for (k,r_k) in zip(y_ix[ind_best],rand_ad_k)]
-                                println("Shrinked the same, change to $y_replace_shrink instead of $new_y")
+                                #println("Shrinked the same, change to $y_replace_shrink instead of $new_y")
                                 y_ix[ind] = y_replace_shrink
                             end
                             push!(index_to_look_for, ind)                  

@@ -3,7 +3,7 @@ module SSD
     using Random 
     using Dates
     using Gurobi
-    using CPLEX
+    #using CPLEX
     using JuMP
     using MathOptInterface
     using Distributions
