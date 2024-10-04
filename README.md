@@ -40,6 +40,7 @@ end
 ```julia
 # Import the package
 using SSD
+using CPUTime
 
 # Create default parameters
 params = SSD.default_params()
@@ -47,20 +48,36 @@ params = SSD.default_params()
 data = SSD.default_data()
 
 
+
+
 # Read the instance to solve
-filename = "instances/I_50 J_5 (0, 100) cv_0.5 D_1 k_5 t_3 FLR_0.4 FCR_2 a_(80, 120) r_(0.3, 0.4).txt"
-SSD.read_instance(filename, data)
+directory = "instances/Own/"
+filename= "1.txt"
+SSD.read_file(directory*filename, data)
 
 # Define the different cost levels
 cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
-data.F = gen_costs(data, params, cost_levels)
+data.F = SSD.gen_costs(data, params, cost_levels)
 # Define the different capacity levels
 cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
-data.Q = gen_caps(data, params, cap_levels)
+data.Q = SSD.gen_caps(data, params, cap_levels)
 
 status = SSD.init_solver_status()
 
-x, y, cost = SSD.minlp(data, params, status)
+solve_method = "bendersPK" # or "lazy_cuts, benders, bendersMW
+
+el = @CPUelapsed res = SSD.solve_ssd(data, params, status, solve_method)
+if solve_method == "iter_cuts"
+    println("$solve_method: lb=$(res[1]), ub=$(res[2]),
+        of_term1_lb=$(res[3]), of_term2_lb=$(res[4]), of_term3_lb=$(res[5]),
+        of_term1_ub=$(res[6]), of_term2_ub=$(res[7]), of_term3_ub=$(res[8]),
+        y=$(res[9]), CPU_t=$el")
+elseif solve_method in ["benders", "bendersWS1", "bendersWS2", "bendersMW", "bendersPK", "bendersSH", "bendersFC", "bendersIter","bendersIterPK"]
+    println("$solve_method: of=$(res[2]), of_term1=$(res[3]), of_term2=$(res[4]), of_term3=$(res[5]), y=$(res[6]), CPU_t=$el, nodes=$(res[9]),
+        feas=$(res[10]), opt=$(res[11])")
+else
+    println("$solve_method: of=$(res[2]), of_term1=$(res[3]), of_term2=$(res[4]), of_term3=$(res[5]), y=$(res[6]), CPU_t=$el")
+end
 ```
 
 
