@@ -53,7 +53,7 @@ data = SSD.default_data()
 # Read the instance to solve
 directory = "instances/Own/"
 filename= "1.txt"
-SSD.read_file(filename, data)
+SSD.read_file(directory*filename, data)
 
 # Define the different cost levels
 cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
