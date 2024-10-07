@@ -1,6 +1,8 @@
 ################################################## Models
 
-function gen_caps(data, params, cap_levels)
+function gen_caps(data, params)
+    # Define the different capacity levels
+    cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
     # Gets the max demand per time period
     max_dem_t = maximum(sum.(eachcol(data.a)))
     Q_j3 = zeros(Float64, data.J)
@@ -10,7 +12,10 @@ function gen_caps(data, params, cap_levels)
     return round.(Q_j3 .* cap_levels', digits=params.round_digits)
 end
 
-function gen_costs(data, params, cost_levels)
+function gen_costs(data, params)
+    # Define the different cost levels
+    cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
+
     delta_x  = maximum(maximum.([data.Jcoords[1,:], data.Icoords[1,:]]))-minimum(minimum.([data.Jcoords[1,:], data.Icoords[1,:]]))
     delta_y = maximum(maximum.([data.Jcoords[2,:], data.Icoords[2,:]]))-minimum(minimum.([data.Jcoords[2,:], data.Icoords[2,:]]))
     x_cen = delta_x/2 + minimum(minimum.([data.Jcoords[1,:], data.Icoords[1,:]]))
@@ -24,7 +29,18 @@ function gen_costs(data, params, cost_levels)
     return round.(F_j3 .* cost_levels', digits=params.round_digits)
 end
 
-function solve_ssd(data, params, status, solve_method)
+function solve_ssd(instance, solve_method)
+    # Create default parameters
+    params = default_params()
+    # Create the data container
+    data = default_data()
+    # Read the instance
+    read_file(instance, data)
+    data.F = gen_costs(data, params)
+    data.Q = gen_caps(data, params)
+    # Initialize the status
+    status = init_solver_status()
+    
     if solve_method == "nlp"
         of, of_term1, of_term2, of_term3, y, x = minlp(data, params, status)
         return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus
