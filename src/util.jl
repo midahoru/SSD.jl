@@ -9,6 +9,7 @@ function gen_caps(data, params)
     for j in 1:data.J
         Q_j3[j] = 1.25*max_dem_t / (data.J * data.FLR)
     end
+    # dims(Q) = |J|*|t|
     return round.(Q_j3 .* cap_levels', digits=params.round_digits)
 end
 
@@ -108,7 +109,7 @@ function ini_ρ_h(data, n=9)
     J = 1:data.J 
     T = 1:data.t
 
-    ini_ρ_h = collect(range(0.1,step=1/(n+1),0.9))
+    ini_ρ_h = collect(range(0.1,length=n,0.9))
     H = 1:length(ini_ρ_h)
     ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
 
