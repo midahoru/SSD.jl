@@ -57,46 +57,63 @@ function solve_ssd(instance, solve_method)
         of, of_term1, of_term2, of_term3, y, x, test_cap, test_cap_sel, test_alloc = model_lazy_cuts(data, params, status)
         return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus, test_cap, test_cap_sel, test_alloc, [] #convert_y_to_print(y.data, data), x.data
 
+    # else
+    #     methods = []
+    #     if "benders" in solve_method
+    #         push!(methods, "Gral")
+    #     end
+    #     if "bendersMW" in solve_method
+    #         push!(methods, "MW")
+    #     end
+    #     if "bendersPK" in solve_method
+    #         push!(methods, "PK")
+    #     end
+    #     if "bendersSH" in solve_method
+    #         push!(methods, "SH")
+    #     end
+    #     if "bendersFC" in solve_method
+    #         push!(methods, "FC")
+    #     end
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status, methods)
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    # end
+        
+
     elseif solve_method == "benders"
         of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status)
         return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
         # return of, of, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut      
 
     elseif solve_method == "bendersMW"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status, ["MW"])
+        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["MW"])
         return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
 
     elseif solve_method == "bendersPK"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status, ["PK"])
+        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["PK"])
+        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    elseif solve_method == "bendersFC"
+        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["FC"])
+        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    elseif solve_method == "bendersSH"
+        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters   = model_benders(data, params, status, ["SH"])
         return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
 
     
-    
-    
-    
-    
-    elseif solve_method == "bendersSH"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub  = model_benders(data, params, status, ["SH"])
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub
 
-    elseif solve_method == "bendersFC"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub  = model_benders(data, params, status, ["FC"])
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub
+    # elseif solve_method == "bendersIter"
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes  = model_benders_iter(data, params, status)
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes
 
-    elseif solve_method == "bendersIter"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes  = model_benders_iter(data, params, status)
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, iter_lp, iter_nodes
+    # elseif solve_method == "heur_NM"
+    #     of, Scost, Ccost, Congcost, best_y, best_x = heur_nelder_mead(data, params, status, ini_y(data), Dict(), 1000, 50)    
+    #     return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(Scost, digits=params.round_digits), round(Ccost, digits=params.round_digits), round(Congcost, digits=params.round_digits), best_y, best_x, status.endStatus
 
-    elseif solve_method == "heur_NM"
-        of, Scost, Ccost, Congcost, best_y, best_x = heur_nelder_mead(data, params, status, ini_y(data), Dict(), 1000, 50)    
-        return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(Scost, digits=params.round_digits), round(Ccost, digits=params.round_digits), round(Congcost, digits=params.round_digits), best_y, best_x, status.endStatus
-
-    elseif solve_method == "heur_LS"
-        return heur_local_search(data, params, status, 1000, 50)
+    # elseif solve_method == "heur_LS"
+    #     return heur_local_search(data, params, status, 1000, 50)
         
-    elseif solve_method == "heur_FB"
-        of, of_term1, of_term2, of_term3, best_y, best_x = heur_local_search_first_best(data, params, status, 1000, 300)
-        return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), best_y, best_x, status.endStatus      
+    # elseif solve_method == "heur_FB"
+    #     of, of_term1, of_term2, of_term3, best_y, best_x = heur_local_search_first_best(data, params, status, 1000, 300)
+    #     return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), best_y, best_x, status.endStatus      
     end
 end
     
@@ -226,7 +243,7 @@ end
 
 ################################################## Nelder-Mead
 # Cost of the Subproblem
-function calc_cost_sp(y0, data, ρ_h, primals, μ, n_outter_cuts, gen_yb = false)
+function calc_cost_sp(y0, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, gen_yb = false)
     ρ_k = Array{Float64}(undef,data.J,data.t)
     M = calc_big_M(data, ρ_h) 
 
@@ -246,7 +263,7 @@ function calc_cost_sp(y0, data, ρ_h, primals, μ, n_outter_cuts, gen_yb = false
         # Congestion cost
         Congcost = 0
 
-        Allocost, Congcost, xval_sp, ρval_sp, Rval_sp, wval_sp, zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, y, ρ_h, n_outter_cuts, μ)
+        Allocost, Congcost, xval_sp, ρval_sp, Rval_sp, wval_sp, zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, params, status, solver, y, ρ_h, n_outter_cuts, μ)
         
         for t in 1:data.t
 

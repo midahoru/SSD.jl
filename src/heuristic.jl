@@ -1,5 +1,5 @@
-function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix, GRB_ENV, all_sols=Dict(), max_iter = 100, max_iter_no_impro = 10)
-    eps = 1e-2                   # tolerance for stopping criterion
+function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, solver, y_ix, GRB_ENV, all_sols=Dict(), max_iter = 100, max_iter_no_impro = 10)
+    eps = 1e-2                   # tolerance for stopping criterion 
     α = 1  #0.1 #                      # reflection scale (>0)
     γ = 2  #1.5 #                      # expansion scale (>1)
     ρNM = 1/2 #0.1 #                     # contraction scale (>0  and <=0.5)
@@ -44,7 +44,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
                     of_sp = all_sols[y_ind]
                 else
                     #println("----- Solving SP for $y_ind -----")
-                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ind, data, ρ_h, primals, μ, n_outter_cuts, true)
+                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ind, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, true)
                     of_sp = Scost + Ccost + Congcost
                     all_sols[y_ind] = of_sp
                     # all_sols, y_ind, of_sp = search_y_same_sol(y_ind, x_k, data, all_sols)
@@ -79,7 +79,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
             if y_ref in keys(all_sols)
                 of_sp_ref = all_sols[y_ref]
             else
-                res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ref, data, ρ_h, primals, μ, n_outter_cuts, true)
+                res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_ref, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, true)
                 of_sp_ref = Scost + Ccost + Congcost                
                 all_sols[y_ref] = of_sp_ref
                 if res_calc
@@ -106,7 +106,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
                 if y_exp in keys(all_sols)
                     of_sp_exp = all_sols[y_exp]
                 else
-                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_exp, data, ρ_h, primals, μ, n_outter_cuts, true)
+                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_exp, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, true)
                     of_sp_exp = Scost + Ccost + Congcost
                     all_sols[y_exp] = of_sp_exp
                     if res_calc
@@ -143,7 +143,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
                 if y_con in keys(all_sols)
                     of_sp_con = all_sols[y_con]
                 else
-                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_con, data, ρ_h, primals, μ, n_outter_cuts, true)
+                    res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(y_con, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, true)
                     of_sp_con = Scost + Ccost + Congcost
                     all_sols[y_con] = of_sp_con
                     if res_calc
@@ -189,7 +189,7 @@ function heur_nelder_mead(primals, μ, n_outter_cuts, data, params, status, y_ix
         best_argmin = argmin(all_sols)
         # res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_sol[1], data, ρ_h, primals, μ, GRB_ENV)
         # return  best_sol[2], Scost, Ccost, Congcost, best_sol[1], x_k
-        res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, ρ_h, primals, μ, n_outter_cuts, true)
+        res_calc, Scost, Ccost, Congcost, ρ_k, x_k = calc_cost_sp(best_argmin, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, true)
         return  all_sols[best_argmin], Scost, Ccost, Congcost, best_argmin, x_k, y_ix
     
     end
