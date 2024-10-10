@@ -205,8 +205,6 @@ function model_benders(data, params, status, types=["Gral"])
         α_mp_node = callback_value(cb, mp[:α_mp])
         
         lb_node = of_mp_node + α_mp_node
-        println("LB node=$lb_node iter = $(status.nIter)")
-        println("UB node=$ub iter = $(status.nIter)")
 
         Allocost, Congcost, _xval_sp, ρval_sp, _Rval_sp, _wval_sp, _zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, params, status, solver, yvals, ρ_h, n_outter_cuts, μ)
 
@@ -215,10 +213,13 @@ function model_benders(data, params, status, types=["Gral"])
         # Update bounds
         if !(false in all_sp_feas)
             if ub_temp < ub || abs(ub-ub_temp)/ub < tol
-                println("UB updated to $ub_temp with y = $(round.(yvals.data))")
+                # println("UB updated to $ub_temp with y = $(round.(yvals.data))")
                 ub = ub_temp
                 # println("UPDATED y from $(yvals_opt) to $(yvals.data)")
-                yvals_opt = yvals           
+                yvals_opt = yvals
+                
+                println("LB node=$lb_node iter = $(status.nIter)")
+                println("UB node=$ub iter = $(status.nIter)")
             end
         end 
 
@@ -1122,7 +1123,7 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
                         opt_cut_gen = @constraint(m, m[:α][t] >= expr)
                         m[Symbol("opt_$(t)_$(status.nIter)")] = opt_cut_gen
                     end
-                    println("iter= $(status.nIter) adding Benders optimality cut for t=$t --------------------") 
+                    # println("iter= $(status.nIter) adding Benders optimality cut for t=$t --------------------") 
                 end
 
                 ### Magnanti-Wong or Fischetti ###
@@ -1336,7 +1337,7 @@ function benders_iter(m, prims, ρ_h, data, params, status, solver, ub, lb_iter,
         
         # Update the UB
         ub_lp = ub_lp_temp < ub_lp ? ub_lp_temp : ub_lp
-        println("New UB =$ub_lp")
+        # println("New UB =$ub_lp")
 
         lb_iter[status.nIter] = lb_lp
         ub_iter[status.nIter] = ub_lp
