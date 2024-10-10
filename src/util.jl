@@ -648,7 +648,7 @@ function is_sol_feas(data, y, x)
     test_cap_sel = true
     test_alloc = true
     for t in 1:data.t
-        test_cap = sum(round.(x[:,:,t]'data.a[:,t], digits=3)) - 10e-3 > sum(gen_y(data, y).*data.Q) > 0 ? false : true
+        test_cap = sum(round.(x[:,:,t]'data.a[:,t], digits=3)) - 10e-3 > sum(y.*data.Q) > 0 ? false : true
         for i in 1:data.I
             test_alloc = sum(x[i,j,t] for j in 1:data.J) == 1 ? true : false
         end

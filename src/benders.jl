@@ -206,7 +206,12 @@ function model_benders(data, params, status, types=["Gral"])
         
         lb_node = of_mp_node + α_mp_node
 
-        Allocost, Congcost, _xval_sp, ρval_sp, _Rval_sp, _wval_sp, _zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, params, status, solver, yvals, ρ_h, n_outter_cuts, μ)
+        # for (agg, prim) in zip([["K"], ["J"], ["K", "J"], []], [primals_k, primals_j, primals_k_j, primals])
+            
+        ## Original
+        agg = []
+        prim = primals
+        Allocost, Congcost, _xval_sp, ρval_sp, _Rval_sp, _wval_sp, _zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(prim, data, params, status, solver, yvals, ρ_h, n_outter_cuts, μ, agg)
 
         ub_temp = of_mp_node + Allocost + Congcost
 
@@ -219,7 +224,7 @@ function model_benders(data, params, status, types=["Gral"])
                 yvals_opt = yvals
                 
                 println("LB node=$lb_node iter = $(status.nIter)")
-                println("UB node=$ub iter = $(status.nIter)")
+                println("UB node=$ub iter = $(status.nIter)\n")
             end
         end 
 
@@ -259,13 +264,20 @@ function model_benders(data, params, status, types=["Gral"])
             if "FC" in types
                 interior_y = yvals
             end
-                      
+                    
             all_sp_dual_vals = solve_benders_sp_dual(duals, data, params, status, solver, interior_y, αvals, ρ_h, n_outter_cuts)
         end
         #####
 
-        # interior_y,
-        _cuts_gen = separate_cuts(mp, yvals, αvals, ρ_h, data, status, types, tol, Solver_ENV, true, cuts_types, all_sp_stat, all_sp_vals, all_sp_duals, all_sp_dual_vals, cb, μ, [], first_it_MW, interior_y, w_fc)
+        
+        cuts_gen = separate_cuts(mp, yvals, αvals, ρ_h, data, status, types, tol, Solver_ENV, true, cuts_types, all_sp_stat, all_sp_vals, all_sp_duals, all_sp_dual_vals, cb, μ, agg, first_it_MW, interior_y, w_fc)
+        # End Original
+
+        #     if cuts_gen
+        #         break
+        #     end
+        # end
+
         # Limit the linear approximation to 100 cuts
         # TODO avoid adding the same cut twice
         if size(ρ_h[:,1,:],2) < 1
@@ -275,7 +287,7 @@ function model_benders(data, params, status, types=["Gral"])
         lb_iter[status.nIter] = lb
         ub_iter[status.nIter] = ub
         
-        println("\n")
+        # println("\n")
         # y_ind_pr = []
         # for r in 1:size(yvals.data)[1]
         #     cap = findfirst(==(1), yvals.data[r,:])
