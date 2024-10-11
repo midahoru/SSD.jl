@@ -53,50 +53,50 @@ function solve_ssd(instance, solve_method)
     
     
     
-    elseif solve_method == "lazy_cuts"
-        of, of_term1, of_term2, of_term3, y, x, test_cap, test_cap_sel, test_alloc = model_lazy_cuts(data, params, status)
-        return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, test_cap, test_cap_sel, test_alloc, [] #convert_y_to_print(y.data, data), x.data
+    elseif solve_method == ["lazy_cuts"]
+        of, of_term1, of_term2, of_term3, y, x, tests_feas = model_lazy_cuts(data, params, status)
+        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas #convert_y_to_print(y.data, data), x.data
 
-    # else
-    #     methods = []
-    #     if "benders" in solve_method
-    #         push!(methods, "Gral")
-    #     end
-    #     if "bendersMW" in solve_method
-    #         push!(methods, "MW")
-    #     end
-    #     if "bendersPK" in solve_method
-    #         push!(methods, "PK")
-    #     end
-    #     if "bendersSH" in solve_method
-    #         push!(methods, "SH")
-    #     end
-    #     if "bendersFC" in solve_method
-    #         push!(methods, "FC")
-    #     end
-    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status, methods)
-    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status.endStatus, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
-    # end
+    else
+        methods = []
+        if "benders" in solve_method
+            push!(methods, "Gral")
+        end
+        if "bendersMW" in solve_method
+            push!(methods, "MW")
+        end
+        if "bendersPK" in solve_method
+            push!(methods, "PK")
+        end
+        if "bendersSH" in solve_method
+            push!(methods, "SH")
+        end
+        if "bendersFC" in solve_method
+            push!(methods, "FC")
+        end
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, cuts_iters, n_vars, n_cons, n_nodes  = model_benders(data, params, status, methods)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, cuts_iters, n_vars, n_cons, n_nodes, tests_feas
+    
         
 
-    elseif solve_method == "benders"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status)
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
-        # return of, of, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut      
+    # elseif solve_method == "benders"
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status)
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    #     # return of, of, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut      
 
-    elseif solve_method == "bendersMW"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["MW"])
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    # elseif solve_method == "bendersMW"
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["MW"])
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
 
-    elseif solve_method == "bendersPK"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["PK"])
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
-    elseif solve_method == "bendersFC"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["FC"])
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
-    elseif solve_method == "bendersSH"
-        of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters   = model_benders(data, params, status, ["SH"])
-        return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    # elseif solve_method == "bendersPK"
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["PK"])
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    # elseif solve_method == "bendersFC"
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters = model_benders(data, params, status, ["FC"])
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
+    # elseif solve_method == "bendersSH"
+    #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters   = model_benders(data, params, status, ["SH"])
+    #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
 
     
 
@@ -656,7 +656,7 @@ function is_sol_feas(data, y, x)
     for j in 1:data.J
         test_cap_sel = sum(y[j,k] for k in 1:data.k) == 1 ? true : sum(y[j,k] for k in 1:data.k) == 0 ? true : false
     end
-    return test_cap, test_cap_sel, test_alloc
+    return [test_cap, test_cap_sel, test_alloc]
 end
 
 

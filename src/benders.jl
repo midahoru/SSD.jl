@@ -31,6 +31,8 @@ function model_benders(data, params, status, types=["Gral"])
     # Keep track of the bounds
     lb_iter = Dict()
     ub_iter = Dict()
+    # and of the number of vars and constraints
+    n_vars, n_cons = 0, []
 
     # Problem parameters
     I = 1:data.I
@@ -50,6 +52,7 @@ function model_benders(data, params, status, types=["Gral"])
 
     # Initialize the Master Problem with the y var (location) relaxed
     mp = ini_benders_mp(data, params, status, solver, Solver_ENV)
+    push!(n_cons, num_constraints(mp; count_variable_in_set_constraints = true))
 
     # Initialize all the subproblems (one per period)
     # Includes the restricted sp and the relaxations
@@ -147,11 +150,14 @@ function model_benders(data, params, status, types=["Gral"])
     n_iter_lp = 0
     # Iters per relaxation
     relax_iters = []
+    # Cuts per relaxation
+    cuts_iters = []
     for (agg, prim) in zip([["K"], ["J"], ["K", "J"], []], [primals_k, primals_j, primals_k_j, primals])        
     # for (agg, prim) in zip([[]], [primals])
         println("Starting relaxation $agg")
-        lb_temp, ub_temp, lb_iter, ub_iter, n_iter_lp, iter_rel, yint, ub_yint, cuts_rel = benders_iter(mp, prim, ρ_h, data, params, status, solver, ub, lb_iter, ub_iter, n_iter_lp, tol, Solver_ENV, n_outter_cuts, agg, μ, first_it_MW, int_y, w_fc, τ, n_bounds)
+        lb_temp, ub_temp, lb_iter, ub_iter, n_iter_lp, iter_rel, yint, ub_yint, cuts_rel = benders_iter(mp, prim, ρ_h, data, params, status, solver, ub, lb_iter, ub_iter, n_iter_lp, tol, n_outter_cuts, agg, μ, first_it_MW, int_y, w_fc, τ, n_bounds)
         push!(relax_iters, iter_rel)
+        push!(cuts_iters, cuts_rel)
         println("With the agg $agg the bounds are lb=$lb_temp and ub=$ub_temp\n")
         # Update UB in case of having an integer solution
         if sum(isinteger.(yint)) == length(yint) && ub_yint < ub
@@ -167,6 +173,7 @@ function model_benders(data, params, status, types=["Gral"])
             break
         end
     end
+    push!(n_cons, num_constraints(mp; count_variable_in_set_constraints = true))
 
     ######### End LP relaxations #########
     ######################################
@@ -270,7 +277,7 @@ function model_benders(data, params, status, types=["Gral"])
         #####
 
         
-        cuts_gen = separate_cuts(mp, yvals, αvals, ρ_h, data, status, types, tol, Solver_ENV, true, cuts_types, all_sp_stat, all_sp_vals, all_sp_duals, all_sp_dual_vals, cb, μ, agg, first_it_MW, interior_y, w_fc)
+        _cuts_gen, _cuts_rel = separate_cuts(mp, αvals, ρ_h, data, status, types, true, cuts_types, all_sp_stat, all_sp_vals, all_sp_duals, all_sp_dual_vals, cb, agg)
         # End Original
 
         #     if cuts_gen
@@ -312,6 +319,7 @@ function model_benders(data, params, status, types=["Gral"])
     set_binary.(mp[:y])
 
     println("\n---- STARTING BRANCHING ----")
+    n_vars = num_variables(mp)
     end_stat_mp, _of_mp, yval_mp, _αval_mp = solve_benders_mp(mp)
     if end_stat_mp == MOI.INFEASIBLE
         status.endStatus = :infeasible
@@ -362,9 +370,10 @@ function model_benders(data, params, status, types=["Gral"])
     Congterm = 0.5 * sum(Dt[t] * (Rval[j,t] + ρval[j,t] + sum(cv^2 * (wval[j,k,t] - zval[j,k,t]) for k in K)) for j in J for t in T)
     # println(n_iter_lp)
 
-    test_cap, test_cap_sel, test_alloc = is_sol_feas(data, yval, xval)    
-    
-    return objective_value(mp), Fterm+Allocterm+Congterm, Fterm, Allocterm, Congterm, yval, xval, n_nodes, status.nFeasCuts, status.nOptCuts, lb_iter, ub_iter, test_cap, test_cap_sel, test_alloc, relax_iters
+    tests_feas = is_sol_feas(data, yval, xval) # test_cap, test_cap_sel, test_alloc
+    # push!(n_cons, num_constraints(mp; count_variable_in_set_constraints = false))
+
+    return Fterm+Allocterm+Congterm, Fterm, Allocterm, Congterm, yval, xval, status, lb_iter, ub_iter, tests_feas, relax_iters, cuts_iters, n_vars, n_cons, n_nodes
     ######### End Restricted problem #############
     ##############################################
 
@@ -1027,7 +1036,7 @@ function update_sp_dual(dual, data, params, status, solver, yvals, αvals, t, n_
     end
 end
 
-function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_ENV, lazy=false, cuts_types="feas", all_sp_stat=[], all_sp_vals=[], all_sp_duals=[], all_sp_dual_vals=[], cb=[], μ=0, agg=[], first_it_MW=false, interior_y=[], w_fc=0)
+function separate_cuts(m, αvals, ρ_h, data, status, types, lazy=false, cuts_types="feas", all_sp_stat=[], all_sp_vals=[], all_sp_duals=[], all_sp_dual_vals=[], cb=[], agg=[])
     I = 1:data.I
     J = 1:data.J
     Q = data.Q
@@ -1038,19 +1047,9 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
     M = calc_big_M(data, ρ_h) 
 
     cuts_gen = false
+    cuts_sep = 0
     
-    # xvals = Array{Float64}(undef, data.I, data.J, data.t)
-    # ρvals = Array{Float64}(undef, data.J, data.t)    
-    # Rvals = Array{Float64}(undef, data.J, data.t)    
-    # wvals = Array{Float64}(undef, data.J, data.k, data.t)
-    # zvals = Array{Float64}(undef, data.J, data.k, data.t)
-
-    # cost_sp = 0
-    # all_feas = true
-    # opt_cuts = []
-
     for t in T
-        ##### Classical Benders ######
         sp_stat = all_sp_stat[t]
         sp_val = all_sp_vals[t]
         duals_sp = all_sp_duals[t]
@@ -1069,13 +1068,7 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
         π4k = π4_vec[2]
         π6k = π6_vec[2]
         π4j = π4_vec[3]
-        π6j = π6_vec[3]
-
-        # xvals[:,:,t] = sp_xval
-        # ρvals[:,t] = sp_ρval
-        # Rvals[:,t] = sp_Rval
-        # wvals[:,:,t] = sp_wval
-        # zvals[:,:,t] = sp_zval        
+        π6j = π6_vec[3]    
 
         H = 1:size(ρ_h[:,t,:],2)
         expr = AffExpr(0) 
@@ -1104,9 +1097,12 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
         add_to_expression!(expr, sum(-π11[j,k] for j in J for k in K))
         add_to_expression!(expr, sum(-π12[j] for j in J))
         
+        ##### Classical Benders ######
+        
         # Add a feasibility cut
         if sp_stat == MOI.INFEASIBLE || sp_stat == MOI.DUAL_INFEASIBLE
             status.nFeasCuts += 1
+            cuts_sep += 1
             if lazy
                 feas_cut = @build_constraint(0 >= expr)  
                 MOI.submit(m, MOI.LazyConstraint(cb), feas_cut)
@@ -1128,6 +1124,7 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
                 if !("FC" in types)
                 # if "Gral" in types
                     status.nOptCuts += 1
+                    cuts_sep += 1
                     if lazy
                         opt_cut_gen = @build_constraint(m[:α][t] >= expr)
                         MOI.submit(m, MOI.LazyConstraint(cb), opt_cut_gen)
@@ -1196,14 +1193,16 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
                         #     first_it_MW = true
                         # end            
                         # _sp_stat, _sp_val, _π0,  π1, π2, π4, π6, π8, π10, π11, π12 = benders_sp_dual(interior_y, data, ρ_h, t, αvals, Solver_ENV)                    
-
+                        status.nOptCuts += 1
+                        cuts_sep += 1
                         if lazy
                             cons_MW = @build_constraint(m[:α][t] >= expr_dual)
                             MOI.submit(m, MOI.LazyConstraint(cb), cons_MW)
-
-                            status.nOptCuts += 1
-                            #println("iter= $(status.nIter) adding Magnanti-Wong optimality cut for t=$t --------------------")
+                        else
+                            cons_MW = @constraint(m, m[:α][t] >= expr_dual)
+                            m[Symbol("opt_MW_$(t)_$(status.nIter)")] = cons_MW
                         end
+                        #println("iter= $(status.nIter) adding Magnanti-Wong optimality cut for t=$t --------------------")
                     end                                        
                     
                     ### Fischetti ###
@@ -1220,11 +1219,16 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
                         # expr += sum(-π10[i,j] for i in I for j in J)
                         # expr += sum(-π11[j,k] for j in J for k in K)
                         # expr += sum(-π12[j] for j in J)
-                        
-                        cons_FC = @build_constraint(π0*m[:α][t] >=  expr_dual)
-                        MOI.submit(m, MOI.LazyConstraint(cb), cons_FC)
                         status.nOptCuts += 1
-                        println("iter= $(status.nIter) adding Fischetti optimality cut for t=$t --------------------")
+                        cuts_sep += 1
+                        if lazy                        
+                            cons_FC = @build_constraint(π0*m[:α][t] >=  expr_dual)
+                            MOI.submit(m, MOI.LazyConstraint(cb), cons_FC)
+                        else
+                            cons_FC = @constraint(m, π0*m[:α][t] >= expr_dual)
+                            m[Symbol("opt_FC_$(t)_$(status.nIter)")] = cons_FC
+                        end                        
+                        #println("iter= $(status.nIter) adding Fischetti optimality cut for t=$t --------------------")
                     end
                 end                
             else
@@ -1290,18 +1294,24 @@ function separate_cuts(m, yvals, αvals, ρ_h, data, status, types, tol, Solver_
             add_to_expression!(expr_dual, sum(-π10[i,j] for i in I for j in J))
             add_to_expression!(expr_dual, sum(-π11[j,k] for j in J for k in K))
             add_to_expression!(expr_dual, sum(-π12[j] for j in J))
-
-            cons_PK = @build_constraint(m[:α][t] >= expr_dual)
-            MOI.submit(m, MOI.LazyConstraint(cb), cons_PK)
+            
             status.nOptCuts += 1
+            cuts_sep += 1
+            if lazy
+                cons_PK = @build_constraint(m[:α][t] >= expr_dual)
+                MOI.submit(m, MOI.LazyConstraint(cb), cons_PK)
+            else
+                cons_PK = @constraint(m, m[:α][t] >= expr_dual)
+                m[Symbol("opt_PK_$(t)_$(status.nIter)")] = cons_PK
+            end            
             # println("iter= $(status.nIter) adding Papadakos optimality cut for t=$t --------------------") 
         end
     end
-    # return interior_y, cuts_gen
-    return cuts_gen
+    
+    return cuts_gen, cuts_sep
 end
 
-function benders_iter(m, prims, ρ_h, data, params, status, solver, ub, lb_iter, ub_iter, n_iter_lp, tol, Solver_ENV, n_outter_cuts, agg=[], μ=0, first_it_MW=false, int_y=[], w_fc=0, τ=10e-5, n_bounds=5)
+function benders_iter(m, prims, ρ_h, data, params, status, solver, ub, lb_iter, ub_iter, n_iter_lp, tol, n_outter_cuts, agg=[], μ=0, first_it_MW=false, int_y=[], w_fc=0, τ=10e-5, n_bounds=5)
     # Convergence test
     last_bounds = zeros(n_bounds)
     conv = false
@@ -1333,11 +1343,12 @@ function benders_iter(m, prims, ρ_h, data, params, status, solver, ub, lb_iter,
         Allocost, Congcost, _xval_sp, _ρval_sp, _Rval_sp, _wval_sp, _zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(prims, data, params, status, solver, yvals_lp, ρ_h, n_outter_cuts, μ, agg)
         
         # _interior_y, 
-        cuts_gen = separate_cuts(m, yvals_lp, αvals_lp, ρ_h, data, status, [], tol, Solver_ENV, false, "all", all_sp_stat, all_sp_vals, all_sp_duals, [], [], μ, agg)
+        _cuts_gen, cuts_rel_iter = separate_cuts(m, αvals_lp, ρ_h, data, status, [], false, "all", all_sp_stat, all_sp_vals, all_sp_duals, [], [], agg)
+        cuts_rel += cuts_rel_iter
 
-        if cuts_gen
-            cuts_rel += 1
-        end
+        # if cuts_gen
+        #     cuts_rel += 1
+        # end
         
         ub_lp_temp = dot(data.F, yvals_lp) + Allocost + Congcost
         # Update the feasible, integer, solution
