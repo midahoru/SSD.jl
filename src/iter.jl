@@ -33,7 +33,7 @@
 #     return lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, ub_dict[ub][1], ub_dict[ub][2], ub_dict[ub][3], yq, xq
 # end
 
-function cuts_priori(data, params, status)    
+function cuts_priori(data, params, status)
 
     # Initialize the bounds
     lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)

@@ -6,10 +6,10 @@ module SSD
     #using CPLEX
     using JuMP
     using MathOptInterface
+    using Clustering
     using Distributions
     using Distances
-    using LinearAlgebra
-    
+    using LinearAlgebra    
     
     include("typedefs.jl")
     include("util.jl")

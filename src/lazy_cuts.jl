@@ -69,7 +69,7 @@ function model_lazy_cuts(data, params, status)
 
     ##### If y continuous
     
-    ρ_h = ini_ρ_h(data)  
+    ρ_h = ini_ρ_h(data, 50)  
     M = calc_big_M(data, ρ_h)
     H = 1:size(ρ_h[:,:,:],3)
 
@@ -78,9 +78,9 @@ function model_lazy_cuts(data, params, status)
     
     function lazycb(cb)
 
-        if callback_node_status(cb, m) != MOI.CALLBACK_NODE_STATUS_INTEGER
-            return
-        end
+        # if callback_node_status(cb, m) != MOI.CALLBACK_NODE_STATUS_INTEGER
+        #     return
+        # end
 
         ρvals = callback_value.(cb, ρ)
         Rvals = callback_value.(cb, R)

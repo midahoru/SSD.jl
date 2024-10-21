@@ -46,17 +46,17 @@ function solve_ssd(instance, solve_method)
         of, of_term1, of_term2, of_term3, y, x = minlp(data, params, status)
         return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus
 
-    elseif solve_method == "iter_cuts"
+    elseif solve_method == ["iter_cuts"]
         lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x = cuts_priori(data, params, status)
-        return round(lb, digits=params.round_digits), round(ub, digits=params.round_digits), round(of_term1_lb, digits=params.round_digits), round(of_term2_lb, digits=params.round_digits), round(of_term3_lb, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus
-
-    
-    
+        return round(lb, digits=params.round_digits), round(ub, digits=params.round_digits), round(of_term1_lb, digits=params.round_digits), round(of_term2_lb, digits=params.round_digits), round(of_term3_lb, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus   
     
     elseif solve_method == ["lazy_cuts"]
         of, of_term1, of_term2, of_term3, y, x, tests_feas = model_lazy_cuts(data, params, status)
-        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas #convert_y_to_print(y.data, data), x.data
+        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits),convert_y_to_print(y.data, data), x.data, status, tests_feas # y, x.data, status, tests_feas #
 
+    elseif solve_method == ["K"] || ["J"] == solve_method || ["KJ"] == solve_method || ["LP"] == solve_method || ["Clust"] == solve_method
+        relax_iters, relax_cuts, relax_lb = model_benders(data, params, status, solve_method)
+        return relax_iters, relax_cuts, relax_lb
     else
         methods = []
         if "benders" in solve_method
@@ -74,8 +74,8 @@ function solve_ssd(instance, solve_method)
         if "bendersFC" in solve_method
             push!(methods, "FC")
         end
-        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, cuts_iters, n_vars, n_cons, n_nodes  = model_benders(data, params, status, methods)
-        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, cuts_iters, n_vars, n_cons, n_nodes, tests_feas
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes  = model_benders(data, params, status, ["Clust"], methods)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas
     
         
 
@@ -187,7 +187,7 @@ function calc_new_ρ(xq, yq, data)
         if den != 0
             ρ_new[j,t]=num/den
         else
-            ρ_new[j,t]=num/rand(1)
+            ρ_new[j,t]=num/rand(1)[begin]
         end
     end
     return ρ_new
