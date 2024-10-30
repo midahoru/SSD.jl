@@ -42,13 +42,13 @@ function solve_ssd(instance, solve_method)
     # Initialize the status
     status = init_solver_status()
     
-    if solve_method == "nlp"
-        of, of_term1, of_term2, of_term3, y, x = minlp(data, params, status)
-        return round(of, digits=params.round_digits), round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus
+    if solve_method == ["nlp"]
+        of, of_term1, of_term2, of_term3, y, x, tests_feas = minlp(data, params, status)
+        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas
 
     elseif solve_method == ["iter_cuts"]
-        lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x = cuts_priori(data, params, status)
-        return round(lb, digits=params.round_digits), round(ub, digits=params.round_digits), round(of_term1_lb, digits=params.round_digits), round(of_term2_lb, digits=params.round_digits), round(of_term3_lb, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status.endStatus   
+        lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x, lb_ls, tests_feas  = cuts_priori(data, params, status)
+        return round(ub, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas  
     
     elseif solve_method == ["lazy_cuts"]
         of, of_term1, of_term2, of_term3, y, x, tests_feas = model_lazy_cuts(data, params, status)
@@ -60,7 +60,7 @@ function solve_ssd(instance, solve_method)
     else
         methods = []
         if "benders" in solve_method
-            push!(methods, "Gral")
+            push!(methods, "B")
         end
         if "bendersMW" in solve_method
             push!(methods, "MW")
@@ -126,7 +126,11 @@ function ini_ρ_h(data, n=9)
     J = 1:data.J 
     T = 1:data.t
 
-    ini_ρ_h = collect(range(0.1,length=n,0.9))
+    if n > 0
+        ini_ρ_h = collect(range(0.1,length=n,0.9))
+    else
+        ini_ρ_h = [0]
+    end
     H = 1:length(ini_ρ_h)
     ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
 
@@ -135,7 +139,6 @@ function ini_ρ_h(data, n=9)
     end
     return ρ_h
 end
-
 
 function calc_ub(x, y, data)
     I = 1:data.I
@@ -212,21 +215,25 @@ function calc_new_w_z(x, y, R, ρ, data)
 end
 
 function calc_big_M(data, ρ_h)
-    J = 1:data.J
-    T = 1:data.t
-    H = 1:size(ρ_h,3)
+    # J = 1:data.J
+    # T = 1:data.t
+    # H = 1:size(ρ_h,3)
+    max_ρ_h = maximum(ρ_h, dims=3)
+    M =  (1 ./ (1 .- max_ρ_h).^2) .- (max_ρ_h.^2 ./ (1 .- max_ρ_h).^2)
 
-    M = zeros(data.J, data.t)
-    for j in J, t in T
-        max_in_1 = 0
-        for h in H
-            value_in_1 = 1/(1-ρ_h[j,t,h])^2 -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2
-            if value_in_1 > max_in_1
-                max_in_1 = value_in_1
-            end
-        end
-        M[j,t]=max_in_1
-    end
+    # M = zeros(data.J, data.t)
+    # for j in J, t in T
+    #     # max_in_1 = 0
+    #     # for h in H
+    #     #     value_in_1 = 1/(1-ρ_h[j,t,h])^2 -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2
+    #     #     if value_in_1 > max_in_1
+    #     #         max_in_1 = value_in_1
+    #     #     end
+    #     # end
+    #     # M[j,t]=max_in_1
+    #     max_ρ_h = maximum(ρ_h[j,t,:]) #max_in_1
+    #     M[j,t]= 1/(1-max_ρ_h)^2 -max_ρ_h^2/(1-max_ρ_h)^2
+    # end
     return M
 end
 

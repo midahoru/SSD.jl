@@ -39,8 +39,8 @@ function cuts_priori(data, params, status)
     lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)
 
     xq, yq, zq, ρq, wq, Rq = [], [], [], [], [], []
-    ρ_h = ini_ρ_h(data)
-    q = 0
+    ρ_h = ini_ρ_h(data,32)
+    lb_ls = []
     ub_dict = Dict()
     of_term1_lb = 0
     of_term2_lb = 0
@@ -51,6 +51,7 @@ function cuts_priori(data, params, status)
     K = 1:data.k
 
     m_iter = ini_model_iter_cuts(data, params, status, ρ_h)
+    # println("Ini size ρ_h=$(size(ρ_h))")
 
     while (ub-lb)/ub >= params.ϵ
         new_lb, of_term1_lb, of_term2_lb, of_term3_lb, yq, xq, zq, ρq, wq, Rq = solve_model_iter_cuts(m_iter, status)
@@ -62,22 +63,31 @@ function cuts_priori(data, params, status)
             break
         end
         lb = new_lb
+        push!(lb_ls,lb)
         newub, of_term1_ub, of_term2_ub, of_term3_ub = calc_ub(xq, yq, data)
         ub_dict[newub] =[of_term1_ub, of_term2_ub, of_term3_ub]
         ub = min(ub, newub)
 
         # Add the new constraints for the linear outter approximation
-        @constraint(m_iter, [j in J, t in T], (1-ρq[j,t])^2 * m_iter[:R][j,t] - m_iter[:ρ][j,t] >= -ρq[j,t]^2)
+        # @constraint(m_iter, [j in J, t in T], (1-ρq[j,t])^2 * m_iter[:R][j,t] - m_iter[:ρ][j,t] >= -ρq[j,t]^2)
+        for j in J, t in T
+            # Add only new tangents
+            if !(ρq[j,t] in ρ_h[j,t,:])
+                @constraint(m_iter, (1-ρq[j,t])^2 * m_iter[:R][j,t] - m_iter[:ρ][j,t] >= -ρq[j,t]^2)
+            end
+        end
         
         # Modify the constraint with the big M
         ρ_h = cat(ρ_h, ρq, dims=3)
         M = calc_big_M(data, ρ_h)
+        # println("Big M = $M")
         for j in J, t in T, k in K
             set_normalized_coefficient(m_iter[:cM][j,t,k], m_iter[:y][j,k], -M[j,t])
         end
-        q+=1
+        status.nIter+=1
     end
-    status.nIter = q
+    # println("End size ρ_h=$(size(ρ_h))")
+    tests_feas = is_sol_feas(data, yq.data, xq.data)
 
-    return lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, ub_dict[ub][1], ub_dict[ub][2], ub_dict[ub][3], yq, xq
+    return lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, ub_dict[ub][1], ub_dict[ub][2], ub_dict[ub][3], yq, xq, lb_ls, tests_feas
 end

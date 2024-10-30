@@ -171,8 +171,7 @@ function solve_model_iter_cuts(m, status)
 
     if end_stat == MOI.INFEASIBLE
         status.endStatus = :infeasible
-        return [], [], [], [], [], [], 0
-        
+        return [], [], [], [], [], [], 0        
     elseif end_stat == MOI.OPTIMAL
         status.endStatus = :optimal
     elseif end_stat == MOI.TIME_LIMIT

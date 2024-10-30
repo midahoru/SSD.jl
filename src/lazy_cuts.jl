@@ -85,7 +85,7 @@ function model_lazy_cuts(data, params, status)
         ρvals = callback_value.(cb, ρ)
         Rvals = callback_value.(cb, R)
 
-        #println("adding cut --------------------")
+        println("adding cut --------------------")
         for j in J, t in T
             if Rvals[j,t] < ρvals[j,t]/(1-ρvals[j,t])
                 con = @build_constraint((1-ρvals[j,t])^2 * R[j,t] - ρ[j,t] >= -ρvals[j,t]^2)

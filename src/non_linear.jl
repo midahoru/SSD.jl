@@ -88,5 +88,8 @@ function minlp(data, params, status)
         # optval = objective_value(m)
         # return xval, yval, zval, ρval, wval, Rval, optval                
     end
-    return objective_value(m), value(of_term1), value(of_term2), value(of_term3), value.(y), value.(x)
+
+    tests_feas = is_sol_feas(data, value.(y).data, value.(x).data)
+
+    return objective_value(m), value(of_term1), value(of_term2), value(of_term3), value.(y), value.(x), tests_feas
 end
