@@ -33,13 +33,13 @@
 #     return lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, ub_dict[ub][1], ub_dict[ub][2], ub_dict[ub][3], yq, xq
 # end
 
-function cuts_priori(data, params, status)
+function cuts_priori(data, params, status, n_outer_cuts)
 
     # Initialize the bounds
     lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)
 
     xq, yq, zq, ρq, wq, Rq = [], [], [], [], [], []
-    ρ_h = ini_ρ_h(data,32)
+    ρ_h = ini_ρ_h(data, n_outer_cuts)
     lb_ls = []
     ub_dict = Dict()
     of_term1_lb = 0
@@ -68,26 +68,35 @@ function cuts_priori(data, params, status)
         ub_dict[newub] =[of_term1_ub, of_term2_ub, of_term3_ub]
         ub = min(ub, newub)
 
-        # Add the new constraints for the linear outter approximation
-        # @constraint(m_iter, [j in J, t in T], (1-ρq[j,t])^2 * m_iter[:R][j,t] - m_iter[:ρ][j,t] >= -ρq[j,t]^2)
+        # Add new constraints for the linear outter approximation
+        update_ρ = false
+        update_M = false
         for j in J, t in T
-            # Add only new tangents
             if !(ρq[j,t] in ρ_h[j,t,:])
                 @constraint(m_iter, (1-ρq[j,t])^2 * m_iter[:R][j,t] - m_iter[:ρ][j,t] >= -ρq[j,t]^2)
+                update_ρ = true
+                if ρq[j,t] > maximum(ρ_h[j,t,:]) && !update_M
+                    update_M = true
+                end
             end
         end
         
-        # Modify the constraint with the big M
-        ρ_h = cat(ρ_h, ρq, dims=3)
-        M = calc_big_M(data, ρ_h)
-        # println("Big M = $M")
-        for j in J, t in T, k in K
-            set_normalized_coefficient(m_iter[:cM][j,t,k], m_iter[:y][j,k], -M[j,t])
+        # Update ρ_h
+        if update_ρ
+            ρ_h = cat(ρ_h, ρq, dims=3)
+            # Update the constraints with the big M
+            if update_M    
+                M = calc_big_M(data, ρ_h)
+                for j in J, t in T, k in K
+                    set_normalized_coefficient(m_iter[:cM][j,t,k], m_iter[:y][j,k], -M[j,t])
+                end
+            end
         end
+        
         status.nIter+=1
     end
     # println("End size ρ_h=$(size(ρ_h))")
     tests_feas = is_sol_feas(data, yq.data, xq.data)
 
-    return lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, ub_dict[ub][1], ub_dict[ub][2], ub_dict[ub][3], yq, xq, lb_ls, tests_feas
+    return lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, ub_dict[ub][1], ub_dict[ub][2], ub_dict[ub][3], yq, xq, lb_ls, tests_feas, [n_outer_cuts, size(ρ_h)[3]]
 end

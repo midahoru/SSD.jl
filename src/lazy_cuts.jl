@@ -1,4 +1,4 @@
-function model_lazy_cuts(data, params, status)
+function solve_lazy_cuts(data, params, status, ρ_h, M)
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -9,9 +9,11 @@ function model_lazy_cuts(data, params, status)
     D = data.D    
     K = 1:data.k
     T = 1:data.t
-    M = data.M
-
     Dt = [D/sum(λ[i, t] for i in I) for t in T]
+
+    # ρ_h = ini_ρ_h(data)  
+    # M = calc_big_M(data, ρ_h)
+    H = 1:size(ρ_h[:,:,:],3)
     
     maxtime = max(1, params.max_time - elapsed(status))
     m = Model(optimizer_with_attributes(Gurobi.Optimizer,
@@ -25,7 +27,7 @@ function model_lazy_cuts(data, params, status)
                                     )
                                     )
 
-   #@variable(m, x[I,J,T], Bin)
+    # @variable(m, x[I,J,T], Bin)
     @variable(m, 0 <= x[I,J,T] <= 1)
     @variable(m, y[J,K], Bin)
     # @variable(m, 0 <= y[J,K] <= 1)
@@ -42,62 +44,63 @@ function model_lazy_cuts(data, params, status)
 
     @objective(m, Min, of_term1 + of_term2 + of_term3)
     
-    # @objective(m, Min, sum(F[j,k]*y[j,k] for j in J for k in K) +
-    # sum(C[i,j,t]*x[i,j,t] for i in I for j in J for t in T) +
-    # 0.5*sum(Dt[t]*(R[j,t] + ρ[j,t] + sum(cv^2*(w[j,k,t]-z[j,k,t]) for k in K)) for j in J for t in T))
-
     # Capacity cannot be exceeded and steady state has to be conserved
-    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*y[j,k] for k in K) <= 0, base_name = "c3")
+    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*y[j,k] for k in K) <= 0, set_string_name = false)
     
     # All customer zones need to be assigned to exactly one facility
-    @constraint(m, [i in I, t in T], sum(x[i,j,t] for j in J) == 1, base_name = "c4")
+    @constraint(m, [i in I, t in T], sum(x[i,j,t] for j in J) == 1, set_string_name = false)
     
     # At most one capacity level can be selected per facility
-    @constraint(m, [j in J], sum(y[j,k] for k in K) <= 1, base_name = "c5")
+    @constraint(m, [j in J], sum(y[j,k] for k in K) <= 1, set_string_name = false)
     
     # 13 - 15 - 16 - 18
-    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0, base_name = "c13")
-    @constraint(m, [j in J, t in T], sum(z[j,k,t] for k in K) - ρ[j,t] == 0, base_name = "c15")
-    @constraint(m, [j in J, t in T], sum(w[j,k,t] for k in K)-R[j,t] == 0, base_name = "c18")
+    @constraint(m, [j in J, t in T], sum(λ[i,t]*x[i,j,t] for i in I) - sum(Q[j,k]*z[j,k,t] for k in K) == 0, set_string_name = false)
+    @constraint(m, [j in J, t in T], sum(z[j,k,t] for k in K) - ρ[j,t] == 0, set_string_name = false)
+    @constraint(m, [j in J, t in T], sum(w[j,k,t] for k in K)-R[j,t] == 0, set_string_name = false)
     # 14 - 17
-    @constraint(m, [j in J, t in T, k in K], z[j,k,t] - y[j,k] <= 0, base_name = "c14")
-    # @constraint(m, [j in J, t in T, k in K], w[j,k,t] - M*y[j,k] <= 0, base_name = "c17")
-    
+    @constraint(m, [j in J, t in T, k in K], z[j,k,t] - y[j,k] <= 0, set_string_name = false)
     
     # Upper bound ρ
-    @constraint(m, [j in J, t in T], -ρ[j, t] >= -(1-10e-5), base_name = "c18")
+    @constraint(m, [j in J, t in T], -ρ[j, t] >= -(1-10e-7), set_string_name = false)   
 
-    ##### If y continuous
+    @constraint(m, [j in J, t in T, k in K], w[j,k,t] - M[j,t]*y[j,k] <= 0, set_string_name = false)
+    @constraint(m, [j in J, t in T, h in H], (1-ρ_h[j,t,h])^2 * R[j,t] - ρ[j,t] >= -ρ_h[j,t,h]^2, set_string_name = false)
     
-    ρ_h = ini_ρ_h(data, 50)  
-    M = calc_big_M(data, ρ_h)
-    H = 1:size(ρ_h[:,:,:],3)
-
-    @constraint(m, [j in J, t in T, k in K], w[j,k,t] - M[j,t]*y[j,k] <= 0, base_name = "c17")
-    @constraint(m, [j in J, t in T, h in H], (1-ρ_h[j,t,h])^2 * R[j,t] - ρ[j,t] >= -ρ_h[j,t,h]^2, base_name = "c16")
-    
+    update_M = false
     function lazycb(cb)
 
-        # if callback_node_status(cb, m) != MOI.CALLBACK_NODE_STATUS_INTEGER
-        #     return
-        # end
+        if callback_node_status(cb, m) != MOI.CALLBACK_NODE_STATUS_INTEGER
+            return
+        end
 
         ρvals = callback_value.(cb, ρ)
         Rvals = callback_value.(cb, R)
-
-        println("adding cut --------------------")
+        
+        update_ρ = false
         for j in J, t in T
-            if Rvals[j,t] < ρvals[j,t]/(1-ρvals[j,t])
-                con = @build_constraint((1-ρvals[j,t])^2 * R[j,t] - ρ[j,t] >= -ρvals[j,t]^2)
-                MOI.submit(m, MOI.LazyConstraint(cb), con)
+            # Add if violation to the left of the right most tangent and if not added before
+            if Rvals[j,t] < ρvals[j,t]/(1-ρvals[j,t]) # && !(ρvals[j,t] in ρ_h[j,t,:])
+                # println("adding cut --------------------")
+                update_ρ = true
+                if ρvals[j,t] < maximum(ρ_h[j,t,:])
+                    con = @build_constraint((1-ρvals[j,t])^2 * R[j,t] - ρ[j,t] >= -ρvals[j,t]^2)
+                    MOI.submit(m, MOI.LazyConstraint(cb), con)
+                else
+                    update_M = true
+                end
+                
             end
         end
         status.nIter += 1
+
+        # Update ρ_h
+        if update_ρ
+            ρ_h = cat(ρ_h, ρvals, dims=3)
+        end
         
     end
     # write_to_file(m, "lazy_cuts_lp_relax_$(status.nIter).lp")
-    # MOI.set(m, MOI.LazyConstraintCallback(), lazycb)
-    
+    MOI.set(m, MOI.LazyConstraintCallback(), lazycb)
     
     optimize!(m)
     end_stat = termination_status(m)
@@ -124,5 +127,19 @@ function model_lazy_cuts(data, params, status)
         # return xval, yval, zval, ρval, wval, Rval, optval
     tests_feas = is_sol_feas(data, value.(y).data, value.(x).data)
 
-    return objective_value(m), value(of_term1), value(of_term2), value(of_term3), value.(y), value.(x), tests_feas
+    return objective_value(m), value(of_term1), value(of_term2), value(of_term3), value.(y), value.(x), tests_feas, ρ_h, update_M
+end
+
+function model_lazy_cuts(data, params, status, n_outer_cuts)
+
+    ρ_h = ini_ρ_h(data, n_outer_cuts)  
+    M = calc_big_M(data, ρ_h)
+    update_M = true
+    of= loc_cost= al_cost= con_cost= y= x= tests_feas = 0
+    while update_M
+        of, loc_cost, al_cost, con_cost, y, x, tests_feas, ρ_h, update_M = solve_lazy_cuts(data, params, status, ρ_h, M)
+        M = calc_big_M(data, ρ_h)
+        println("we will update M = $update_M")
+    end
+    return of, loc_cost, al_cost, con_cost, y, x, tests_feas, [n_outer_cuts, size(ρ_h)[3]]
 end

@@ -30,7 +30,7 @@ function gen_costs(data, params)
     return round.(F_j3 .* cost_levels', digits=params.round_digits)
 end
 
-function solve_ssd(instance, solve_method)
+function solve_ssd(instance, solve_method, n_outer_cuts=32)
     # Create default parameters
     params = default_params()
     # Create the data container
@@ -47,12 +47,12 @@ function solve_ssd(instance, solve_method)
         return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas
 
     elseif solve_method == ["iter_cuts"]
-        lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x, lb_ls, tests_feas  = cuts_priori(data, params, status)
-        return round(ub, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas  
+        lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x, lb_ls, tests_feas, n_tan  = cuts_priori(data, params, status, n_outer_cuts)
+        return round(ub, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas, n_tan 
     
     elseif solve_method == ["lazy_cuts"]
-        of, of_term1, of_term2, of_term3, y, x, tests_feas = model_lazy_cuts(data, params, status)
-        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits),convert_y_to_print(y.data, data), x.data, status, tests_feas # y, x.data, status, tests_feas #
+        of, of_term1, of_term2, of_term3, y, x, tests_feas, n_tan = model_lazy_cuts(data, params, status, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits),convert_y_to_print(y.data, data), x.data, status, tests_feas, n_tan # y, x.data, status, tests_feas #
 
     elseif solve_method == ["K"] || ["J"] == solve_method || ["KJ"] == solve_method || ["LP"] == solve_method || ["Clust"] == solve_method
         relax_iters, relax_cuts, relax_lb = model_benders(data, params, status, solve_method)
@@ -74,8 +74,8 @@ function solve_ssd(instance, solve_method)
         if "bendersFC" in solve_method
             push!(methods, "FC")
         end
-        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes  = model_benders(data, params, status, ["Clust"], methods)
-        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, ["Clust"], methods, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
     
         
 
@@ -122,12 +122,12 @@ end
 
 
 ################################################## Linear model with cuts
-function ini_ρ_h(data, n=9)
+function ini_ρ_h(data, n=10)
     J = 1:data.J 
     T = 1:data.t
 
     if n > 0
-        ini_ρ_h = collect(range(0.1,length=n,0.9))
+        ini_ρ_h = collect(range(0.1,length=n,0.97))
     else
         ini_ρ_h = [0]
     end
@@ -250,7 +250,7 @@ end
 
 ################################################## Nelder-Mead
 # Cost of the Subproblem
-function calc_cost_sp(y0, data, params, status, solver, ρ_h, primals, μ, n_outter_cuts, gen_yb = false)
+function calc_cost_sp(y0, data, params, status, solver, ρ_h, primals, μ, n_outer_cuts, gen_yb = false)
     ρ_k = Array{Float64}(undef,data.J,data.t)
     M = calc_big_M(data, ρ_h) 
 
@@ -270,11 +270,11 @@ function calc_cost_sp(y0, data, params, status, solver, ρ_h, primals, μ, n_out
         # Congestion cost
         Congcost = 0
 
-        Allocost, Congcost, xval_sp, ρval_sp, Rval_sp, wval_sp, zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, params, status, solver, y, ρ_h, n_outter_cuts, μ)
+        Allocost, Congcost, xval_sp, ρval_sp, Rval_sp, wval_sp, zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, params, status, solver, y, ρ_h, n_outer_cuts, μ)
         
         for t in 1:data.t
 
-            # sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, Alloterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = solve_benders_sp_primal(primals[t], data, ρ_h, t, n_outter_cuts)
+            # sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, Alloterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = solve_benders_sp_primal(primals[t], data, ρ_h, t, n_outer_cuts)
             sp_stat = all_sp_stat[t]
             
             if sp_stat == MOI.OPTIMAL
