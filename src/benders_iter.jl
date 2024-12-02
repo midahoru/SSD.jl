@@ -1,266 +1,40 @@
-function model_benders_iter(data, params, status, types=["Gral"])
-    Fterm = 0
-    Cterm = 0
-    Congterm = 0
-    timer = Timer(params.max_time - elapsed(status))
-    
-    while true
-
-        isopen(timer) || break
-        yield()
-
-        I = 1:data.I
-        J = 1:data.J
-        λ = data.a
-        C = data.C
-        F = data.F
-        Q = data.Q
-        cv = data.cv
-        D = data.D    
-        K = 1:data.k
-        T = 1:data.t
-
-        ρ_h = ini_ρ_h(data)  
-        M = calc_big_M(data, ρ_h)
-        Dt = [D/sum(λ[i, t] for i in I) for t in T]
-
-        # Initialize the bounds
-        lb, ub = 0, sum(data.F)+sum(data.C)+data.D*sum(data.a)
-
-        # println("LB = $lb, UB = $ub")
-
-        # Termination parameters
-        t_lim_mp = 10
-        t_lim_sp = 5
-
-        # Monitor the bounds...
-        lb_iter = Dict()
-        ub_iter = Dict()
-        # ... and the iterations
-        n_iter_lp = 0
-        n_iter_nodes = 0
-
-        # Param for RHS perturbation Sherali
-        μ = 0
-        # Multiplier Fischetti
-        w_fc = 0
-
-        # Convergence criteria for the LP relax
-        τ = 10e-4
-        # Number of bounds to consider for calculating the Convergence
-        n_bounds = 5
-        last_bounds = zeros(n_bounds)
-        conv = false
-
-        # Initialize arrays for decision variables results
-        yvals = Array{Float64}(undef, data.J, data.k)
-        yvals_opt = Array{Float64}(undef, data.J, data.k)        
-        αvals = [0 for t in T]
-        xvals = []
-        ρvals = []
-        Rvals = []
-        wvals = []
-        zvals = []
-        yvals_lp = []
-
-        # Initialize linear relaxation of the master problem
-        mp = ini_lp_benders(data, params, status)
-
-        # Gurobi environments
-        GRB_ENV_primals = Gurobi.Env()
-
-        # Initialize the primal subproblems
-        primals = Dict()
-        int_y_ind = [data.k for j in J]
-        int_y = gen_y(data, int_y_ind)
-        # Initialize all the subproblems (one per period)
-        for t in T
-            primals[t] = ini_benders_sp_primal(int_y, data, ρ_h, t, μ, params, status,GRB_ENV_primals)
-        end 
-
-        # Initial interior point
-        first_it_MW = false
-        first_it_PK = true
-
-        # Solve the LP relaxation
-        println("\n---- STARTING ROOT NODE ----\n")
-        while !conv && lb + 10e-5 < ub
-            status.nIter += 1
-            n_iter_lp += 1
-
-            end_stat_lp, of_lp, yvals_lp, αvals_lp = benders_mp(mp)
-            lb = of_lp
-            println("\n /////////// Iter $(status.nIter)")            
-            println("The LMP is $end_stat_lp")
-            println("LB = $lb")
-            last_bounds = append!(last_bounds, of_lp)[2:end]
-            conv = last_bounds[end]-last_bounds[begin] <= τ*last_bounds[end] ? true : false
-            
-            # println("First OF $(last_bounds[begin]) / last OF $of_lp")
-            # println("Convergeance is $conv because ϵ=$((last_bounds[end]-last_bounds[begin])/last_bounds[end])")
-            # println("Yvals = $(yvals_lp.data)")
-            # println("αvals = $(αvals_lp.data)")
-            
-            mp, primals, ρ_h, cost_sp, update_bounds, xvals, ρvals, Rvals, wvals, zvals, _first_it_MW, _int_y  = separate_cuts(mp, yvals_lp, αvals_lp, primals, ρ_h, μ, [], data, status)
-            
-            println("α=$(sum(αvals_lp)) and cost_sp = $cost_sp")
-            if sum(αvals_lp) >= cost_sp
-                println("It should be done")
-                break
-            end
-            
-            ub = ub > dot(F, yvals_lp) + cost_sp ? dot(F, yvals_lp) + cost_sp : ub
-            println("UB = $ub and ub_Current = $(dot(F, yvals_lp) + cost_sp)")
-            # println("ρ_h = $ρ_h")
-            # ub = minimum([ub, dot(F, yvals_lp) + cost_sp])
-
-            lb_iter[status.nIter] = lb
-            ub_iter[status.nIter] = ub
-            # if 29 <= status.nIter <= 31
-            #     write_to_file(mp, "lp_relax_$(status.nIter).lp")
-            # end
-        end
-
-        # print("Yvals rel = $yvals_lp")
-        
-
-        # Change the y vars as binary
-        for j in J,  k in K
-            set_binary(mp[:y][j,k])
-        end
-
-        set_start_value.(mp[:y], ceil.(yvals_lp))
-
-        
-        if "SH" in types # =="SH"
-            μ = 10e-6
-        end
-
-        if "FC" in types # =="FC"
-            w_fc = 1
-        end    
-
-        ub = sum(data.F)+sum(data.C)+data.D*sum(data.a)
-
-        println("\n---- STARTING BRANCHING ----")
-        println(" $(status.nIter) iterations so far")
-        println("Starting with bounds lb=$lb and ub=$ub\n")
-        while (ub-lb)/ub >= 10e-4 && lb + 10e-5 < ub && status.nIter < 125  # (ub-lb)/ub >= params.ϵ
-
-            if "PK" in types
-                τ_PK = 0.5
-                if !first_it_PK
-                    int_y = τ_PK.*int_y .+ (1-τ_PK).*yvals
-                else
-                    int_y = gen_y(data, int_y_ind) #yvals
-                    first_it_PK = false
-                end         
-                
-                for t in T 
-                    sp_stat, _sp_val, _π0,  π1, π2, π4, π6, π8, π10, π11, π12 = benders_sp_dual(int_y, data, ρ_h, t, αvals)
-
-                    if sp_stat == MOI.OPTIMAL
-                    
-                        status.nOptCuts += 1
-                        H = 1:size(ρ_h[:,t,:],2)
-                        expr = zero(AffExpr)
-                        expr += sum(-π1[j]*Q[j,k]*mp[:y][j,k] for j in J for k in K)
-                        expr += sum(-π4[j,k]*mp[:y][j,k] for j in J for k in K)
-                        expr += sum(-π6[j,k]*M[j,t]*mp[:y][j,k] for j in J for k in K)
-                        
-                        expr += sum(π2[i] for i in I)
-                        expr += sum(-π8[j,h]*ρ_h[j,t,h]^2 for j in J for h in H)
-                        expr += sum(-π10[i,j] for i in I for j in J)
-                        expr += sum(-π11[j,k] for j in J for k in K)
-                        expr += sum(-π12[j] for j in J)
-                        mp[Symbol("PK_$(t)_$(status.nIter)" )] = @constraint(mp, mp[:α][t] >= expr, base_name="PK_$(t)_$(status.nIter)")
-                        println("iter= $(status.nIter) adding Papadakos optimality cut for t=$t --------------------")
-                    end
-                end
-            end
-
-            end_stat, mp_of, yvals, αvals = benders_mp(mp)            
-
-            if end_stat == MOI.INFEASIBLE
-                println("The problem is infeasible")
-                break 
-            end
-            lb = mp_of
-            println("LB= $lb    UB=$ub")
-
-            # println("Solving sp with $yvals")
-            mp, primals, ρ_h, cost_sp, update_bounds, xvals, ρvals, Rvals, wvals, zvals, first_it_MW, int_y = separate_cuts(mp, yvals, αvals, primals, ρ_h, μ, types, data, status, first_it_MW, int_y, w_fc)
-            # println("$αvals")
-            # println(cost_sp)
-            if sum(αvals) >= cost_sp
-                println("It should be done")
-                break
-            elseif ub >= dot(F, yvals) + cost_sp
-            # # Update bounds   
-            # # if update_bounds
-            # if ub >= dot(F, yvals) + cost_sp #&& update_bounds
-                println("UB updated to $ub")
-                
-                
-                ub = dot(F, yvals) + cost_sp
-                # set_normalized_rhs(mp[:mp_ub], ub) #cost_sp)
-                Fterm = dot(F, yvals)
-                Cterm = dot(C, xvals)  
-                Congterm = 0.5*sum(Dt[t] * (Rvals[j, t] + ρvals[j, t] + sum(cv^2 * (wvals[j, k, t] - zvals[j, k, t]) for k in K)) for j in J for t in T)                
-                yvals_opt = yvals                
-            end
-            println("iter $(status.nIter): LB = $mp_of / UB = $(dot(F, yvals) + cost_sp) /  ub = $ub  / ϵ = $((ub-lb)/ub)\n")
-            # ub = ub > dot(F, yvals) + cost_sp ? dot(F, yvals) + cost_sp : ub
-            # ub = minimum([ub, dot(F, yvals) + cost_sp])
-            
-            # Fterm = dot(F, yvals)
-            # Cterm = dot(C, xvals)  
-            # Congterm = 0.5*sum(Dt[t] * (Rvals[j, t] + ρvals[j, t] + sum(cv^2 * (wvals[j, k, t] - zvals[j, k, t]) for k in K)) for j in J for t in T)
-            # println("SP = $cost_sp while with vars Var cost = $(Cterm + Congterm)")
-
-            status.nIter+=1
-            n_iter_nodes += 1
-
-            lb_iter[status.nIter] = lb
-            ub_iter[status.nIter] = ub
-        
-            # return Fterm+Cterm+Congterm, Fterm+Cterm+Congterm, Fterm, Cterm, Congterm, yvals, xvals, status.nIter, status.nFeasCuts, status.nOptCuts, lb_iter, ub_iter, n_iter_lp, n_iter_nodes
-            
-            # println(yvals)
-        end
-
-        if "SH" in types                        
-            M = calc_big_M(data, ρ_h)
-
-            for t in T
-                primal_sp = primals[t]
-                # primal_sp = update_primal_comp(primal_sp, data, yval, M, t, 0, true)
-                primal_sp = update_primal(primal_sp, data, yvals_opt, M, t, 0, ρ_h)
-                
-                _sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, _sp_val, _sp_Cterm, _sp_Congterm, _π1, _π2, _π4, _π6, _π8, _π10, _π11, _π12 = benders_sp_primal(primal_sp, data, ρ_h, t)
-                xvals[:,:,t] = sp_xval
-                ρvals[:,t] = sp_ρval
-                Rvals[:,t] = sp_Rval
-                wvals[:,:,t] = sp_wval
-                zvals[:,:,t] = sp_zval
-            end
-            Fterm = dot(F, yvals_opt)
-            Cterm = dot(C, xvals)  
-            Congterm = 0.5*sum(Dt[t] * (Rvals[j, t] + ρvals[j, t] + sum(cv^2 * (wvals[j, k, t] - zvals[j, k, t]) for k in K)) for j in J for t in T)        
-        end
-
-        return Fterm+Cterm+Congterm, Fterm+Cterm+Congterm, Fterm, Cterm, Congterm, yvals_opt, xvals, status.nIter, status.nFeasCuts, status.nOptCuts, lb_iter, ub_iter, n_iter_lp, n_iter_nodes
+function model_benders_iter(data, params, status, relaxations=["Clust"], types=["B"], n_outer_cuts=32)
+    solver = "gurobi" #cplex or gurobi
+    # Solver environment
+    if solver == "gurobi"
+        Solver_ENV = Gurobi.Env()
+    elseif solver == "cplex" 
+        Solver_ENV = CPLEX.Env()
     end
-    # Fterm = dot(F, yvals)
-    # Cterm = dot(C, xvals)  
-    # Congterm = 0.5*sum(Dt[t] * (Rvals[j, t] + ρvals[j, t] + sum(cv^2 * (wvals[j, k, t] - zvals[j, k, t]) for k in K)) for j in J for t in T)
+
+    # # Parameters for the different acceleration techniques
+    # # Magnanti-Wang & Papadakos
+    # first_it_MW = true
+    # interior_y = gen_y(data, repeat([data.k], data.J))
+    # τ_MW = 0.5
+    # τ_PK = 0.5
     
-    return Fterm+Cterm+Congterm, Fterm+Cterm+Congterm, Fterm, Cterm, Congterm, yvals_opt, xvals, status.nIter, status.nFeasCuts, status.nOptCuts, lb_iter, ub_iter, n_iter_lp, n_iter_nodes
+    # RHS perturbation Sherali    
+    if "SH" in types
+        μ = 10e-6
+    else
+        μ = 0
+    end
+    # Multiplier Fischetti
+    if "FC" in types
+        w_fc = 1
+    else
+        w_fc = 0
+    end
+    w0 = 1
 
-end
+    # Keep track of the bounds
+    lb_iter = Dict()
+    ub_iter = Dict()
+    # and of the number of vars and constraints
+    n_vars, n_cons, n_nodes = 0, [], 0
 
-
-function ini_mp_benders2(data, params, status, types) 
+    # Problem parameters
     I = 1:data.I
     J = 1:data.J
     λ = data.a
@@ -271,294 +45,423 @@ function ini_mp_benders2(data, params, status, types)
     D = data.D    
     K = 1:data.k
     T = 1:data.t
-    # M = data.M
-
+    # n_outer_cuts = 32
+    ρ_h = ini_ρ_h(data, n_outer_cuts)  
+    M = calc_big_M(data, ρ_h)
     Dt = [D/sum(λ[i, t] for i in I) for t in T]
 
-    ρ_h = ini_ρ_h(data)  
-    M = calc_big_M(data, ρ_h)
+    # Initialize the Master Problem with the y var (location) relaxed
+    mp = ini_benders_mp(data, params, status, solver, Solver_ENV)
+    push!(n_cons, num_constraints(mp; count_variable_in_set_constraints = true))
+
+    # Initialize all the subproblems (one per period)
+    # Includes the restricted sp and the relaxations
+    primals = Dict()
+    duals = Dict()    
+    dualsMW = Dict()
+    sp_m = Dict()
+
+    # Find the min cap level for wich the total cap of all facilities
+    # is greatter than the max demand of all the periods
+    # cap_0 = findfirst(>=(maximum(sum(λ, dims=1))), sum(Q, dims=1))[2]
+    # println("Min cap $cap_0")
     
-    maxtime = max(1, params.max_time - elapsed(status))
+    int_y_ind = repeat([0], data.J) #[0 for j in J]  #[data.k for j in J] # repeat([cap_0], data.J)  #
+    int_y = gen_y(data, int_y_ind)   
 
-    # Param for RHS perturbation Sherali
-    μ = 0
-    # Multiplier Fischetti
-    w_fc = 0
 
-    # Master problem
-    mp = Model(optimizer_with_attributes(Gurobi.Optimizer,
-                                    "OutputFlag" => 0,
-                                    "Threads" => 1,
-                                    "MIPGap" => 1e-5,
-                                    "MIPFocus" => 2,
-                                    "TimeLimit" => maxtime + 1,
-                                    "LazyConstraints" => 1,
-                                    "Presolve" => 0,
-                                    )
-                                    )
+    ##############################################
+    ######### Warmstart and initial cuts #########
 
+    # all_sols=Dict()
+    # y_NM_vert = ini_y(data)
+    # of_NM, _of_term1_NM, _of_term2_NM, _of_term3_NM, y_ind_NM, _best_x_NM, y_NM_vert = heur_nelder_mead(primals, μ, n_outer_cuts, data, params, status, solver, y_NM_vert, Solver_ENV, all_sols, 10,2) #min(data.I,50), 2)
+    # int_y = gen_y(data, y_ind_NM)
     
-    @variable(mp, y[J,K], Bin)
-    @variable(mp, α[T] >= 0)
+    # # Add the cut for the resulting vertex
+    # # TODO: Validate if using the final simplex is a good idea
+    # # TODO: Validate the addition of cuts: they might be cutting the sol
+    # unique_index_NM = indexin(unique(y_NM_vert), y_NM_vert)
+    # for y_NM in y_NM_vert[unique_index_NM]
+    #     Allocost, Congcost, xval_sp, ρval_sp, Rval_sp, wval_sp, zval_sp, all_sp_stat, all_sp_feas, all_sp_vals, all_sp_duals = solve_benders_sp_primal(primals, data, params, status, solver, gen_y(data, y_NM), ρ_h, n_outer_cuts, μ)
+    #     for t in T
+    #         duals_sp = all_sp_duals[t]
+    #         π1 = duals_sp["π1"]
+    #         π2 = duals_sp["π2"]
+    #         π4_vec = duals_sp["π4_vec"]
+    #         π6_vec = duals_sp["π6_vec"]
+    #         π8 = duals_sp["π8"]
+    #         π10 = duals_sp["π10"]
+    #         π11 = duals_sp["π11"]
+    #         π12 = duals_sp["π12"] 
+    
+    #         π4 = π4_vec[1]
+    #         π6 = π6_vec[1]
 
-    @expression(mp, of_mp, sum(F[j,k]*y[j,k] for j in J for k in K))
-    @expression(mp, α_mp, sum(α[t] for t in T))
-
-    @objective(mp, Min, of_mp + α_mp)
-
-    # @objective(mp, Min, sum(F[j,k]*y[j,k] for j in J for k in K) + sum(α[t] for t in T))
-
-    # At most one capacity level can be selected per facility
-    @constraint(mp, [j in J], sum(y[j,k] for k in K) <= 1, base_name = "c_mp_1")
-
-    ## Valid inequalities
-    # The total available capacity needs to be enough to handle the demand at all periods    
-    ### @constraint(mp,  sum(Q[j,k]*y[j,k] for j in J for k in K) >= maximum(sum(λ,dims=1)))
-    # Better by time
-    @constraint(mp, [t in T], sum(Q[j,k]*y[j,k] for j in J for k in K) >= sum(λ[:,t]), base_name="c_mp_2")
-
-    # Since we are allocating all the demand, the variable costs have to be greatter or equal than
-    # the cost of allocating each node to the least expensive facility (closest one) plus
-    # the congestion that each demand node would produce by itself if it was the onlye one allocated
-    # to the facility with greatter capacity
-    max_q = maximum(Q)
-    min_con = minimum(λ, dims=1)
-    # min_con = []
-    # for t in T
-    #     min_con_t = 0
-    #     for i in I
-    #         min_con_t += ((1+cv^2)/2) * (λ[i,t]^2/(max_q*(max_q-λ[i,t]))) + (λ[i,t]/max_q)
+    #         H = 1:size(ρ_h[:,t,:],2)
+    #         expr =  AffExpr(0)
+    #         add_to_expression!(expr, sum(-π1[j]*sum(Q[j,k]*mp[:y][j,k] for k in K) for j in J))
+    #         add_to_expression!(expr, sum(-π4[j,k]*mp[:y][j,k] for j in J for k in K))
+    #         add_to_expression!(expr, sum(-π6[j,k]*M[j,t]*mp[:y][j,k] for j in J for k in K))
+    #         add_to_expression!(expr, sum(π2[i] for i in I))
+    #         add_to_expression!(expr, sum(-π8[j,h]*ρ_h[j,t,h]^2 for j in J for h in H))
+    #         add_to_expression!(expr, sum(-π10[i,j] for i in I for j in J))
+    #         add_to_expression!(expr, sum(-π11[j,k] for j in J for k in K))
+    #         add_to_expression!(expr, sum(-π12[j] for j in J))
+            
+    #         mp[Symbol("opt_NM_$(t)_$(y_NM)")] = @constraint(mp, mp[:α][t] >= expr)
+    #         status.nOptCuts += 1 
     #     end
-    #     append!(min_con, min_con_t)
     # end
-    @constraint(mp, [t in T], α[t] >= floor(sum([minimum(C[i,:,t]) for i in I]))  + 
-    floor(Dt[t]*(((1+cv^2)/2) * (min_con[t]^2/(max_q*(max_q-min_con[t]))) + (min_con[t]/max_q))), base_name="c_mp_3")
+    ######### End warmstart #########
+    #################################
 
-    # for t in T
-    #     println("For t=$t the lb is $(floor(sum([minimum(C[i,:,t]) for i in I]))) + $(floor(Dt[t]*min_con[t]))")
-    # end
 
-    ρ = Array{Float64}(undef, data.J, data.t)
 
-    int_y_ind = [data.k for j in J]
-    int_y = gen_y(data, int_y_ind)
+    ##################################
+    ######### LP relaxations #########
 
-    ### Warmstart (WS) ####
-    if "WS1" in types         
-        of, of_term1, of_term2, of_term3, y_ind_ws, best_x = heur_local_search_first_best(data, params, status, 50, 3)
-        y_ws = gen_y(data, y_ind_ws)  
-        set_start_value.(y, y_ws)
-    elseif "WS2" in types
-        all_sols=Dict()
-        of, of_term1, of_term2, of_term3, y_ind_ws, best_x =  heur_nelder_mead_y(data, params, status, ini_y(data), all_sols, 30, 3)
-        y_ws = gen_y(data, y_ind_ws)  
-        set_start_value.(y, y_ws)
+    # Set the initial bounds
+    lb, ub = floor(sum([minimum(C[i,:,:]) for i in I])), 10e5 #of_NM #
+    lb_iter[status.nIter] = lb
+    ub_iter[status.nIter] = ub
+
+    # Convergence criteria
+    tol = 10e-5 # To compare lb against ub
+    τ = 10e-4 # Gap     
+    n_bounds_rel = 5 # Number of bounds to consider for calculating the Convergence
+    max_iters_rel = 1000
+
+    set_start_value.(mp[:y], int_y)
+    
+    # Solve iteratively for different relaxations
+    println("\n---- SOLVING RELAXATIONS ----\n")
+
+    # Iters per relaxation
+    relax_iters = []
+    # Cuts per relaxation
+    relax_cuts = []
+    # lb per relaxation
+    relax_lb = []
+
+    # Define the relaxations to use
+    rel_to_run = []
+    max_relax = []
+    if "K" in relaxations
+        push!(rel_to_run, ["K"]) # = [types]
+        push!(max_relax, 1)
+        # sp_to_test = [primals_k]
+    elseif "J" in relaxations
+        push!(rel_to_run, ["J"]) 
+        push!(max_relax, 1)
+    elseif "KJ" in relaxations
+        push!(rel_to_run, ["KJ"]) 
+        push!(max_relax, 1)
+    elseif "LP" in relaxations
+        push!(rel_to_run, [])
+        push!(max_relax, 1)
+    elseif "Clust" in relaxations
+        push!(max_relax, 5)
+        n_clus = max(2,Int64(floor(data.J/10)))
+        res_clus = kmeans(data.Jcoords, n_clus)
+        @assert nclusters(res_clus) == n_clus "The number of clusters is not the specified"
+        # Clusters of facilities
+        set_R = []
+        for clus in 1:nclusters(res_clus)
+            set_Rl=[]
+            fac = findall(==(clus), assignments(res_clus))
+            for f in fac
+                for k in K
+                    push!(set_Rl, (f,k))
+                end
+            end
+            push!(set_R, set_Rl)
+        end
+        push!(rel_to_run, set_R)
     end
 
-    return mp
+    n_iter_rel_clus = 1
+    keep_relax = true
+    if length(rel_to_run) > 0 
+        for (agg, max_rel) in zip(rel_to_run, max_relax)
+            while n_iter_rel_clus <= max_rel && keep_relax
+
+                prim_rel = Dict()
+                for t in T
+                    prim_rel[t] = ini_benders_sp_primal(int_y, data, ρ_h, M, t, 0, params, status, solver, Solver_ENV, agg)
+                end
+                                                                                                                                                       
+                lb_temp, ub_temp, lb_iter, ub_iter, iter_rel, cuts_rel, yval_rel, _αval_rel, xval_rel, ρval_rel, Rval_rel, wval_rel, zval_rel, ρ_h = benders_iter(mp, prim_rel, ["Rel"], ρ_h, M, data, params, status, solver, lb, ub, lb_iter, ub_iter, tol, n_outer_cuts, agg, 0, int_y, w_fc, τ, n_bounds_rel, max_iters_rel)
+                push!(relax_iters, iter_rel)
+                push!(relax_cuts, cuts_rel)        
+                push!(relax_lb, lb_temp)
+                println("With this agg the bounds are lb=$lb_temp and ub=$ub_temp after $cuts_rel cuts\n")
+
+                if lb < lb_temp
+                    lb = lb_temp
+                end
+                
+                if cuts_rel <= 5*data.t
+                    keep_relax = false
+                    if cuts_rel == 0
+                        break
+                    end
+                end
+
+                # Finds the pairs (j,k) violating the original constraints 
+                if "Clust" in relaxations
+                    calc_viol!(data, yval_rel, wval_rel, zval_rel, M, agg)
+                end
+
+                n_iter_rel_clus += 1
+            end
+        end
+    end
+
+    # Set y vars as binary
+    set_binary.(mp[:y])
+
+    # Initialize the subproblems
+    for t in T
+        if "SH" in types
+            sp_m[t] = ini_benders_sp_primal(int_y, data, ρ_h, M, t, μ, params, status, solver, Solver_ENV)
+        elseif "B" in types || "PK" in types || "FC" in types
+            sp_m[t] = ini_benders_sp_dual(int_y, data, ρ_h, M, t, params, status, solver, Solver_ENV, types, w_fc, w0)
+        elseif "MW" in types
+            sp_m[t] = ini_benders_sp_dual(int_y, data, ρ_h, M, t, params, status, solver, Solver_ENV, ["B"], w_fc, w0)
+            dualsMW[t] = ini_benders_sp_dual(int_y, data, ρ_h, M, t, params, status, solver, Solver_ENV, types, w_fc, w0)
+        end
+    end
+
+    n_bounds = 100
+    max_iters = 10e6
+    lb_temp, ub_temp, lb_iter, ub_iter, iter_rel, cuts_rel, yval, _αval, xval, ρval, Rval, wval, zval, ρ_h = benders_iter(mp, sp_m, types, ρ_h, M, data, params, status, solver, lb, ub, lb_iter, ub_iter, tol, n_outer_cuts, [], μ, int_y, w_fc, τ, n_bounds, max_iters, dualsMW)     
+    
+    push!(n_cons, num_constraints(mp; count_variable_in_set_constraints = true))
+    
+    Fterm = sum(F[j,k]*yval[j,k] for j in J for k in K)
+    Allocterm = sum(C[i,j,t]*xval[i,j,t] for i in I for j in J for t in T)
+    Congterm = 0.5 * sum(Dt[t] * (Rval[j,t] + ρval[j,t] + sum(cv^2 * (wval[j,k,t] - zval[j,k,t]) for k in K)) for j in J for t in T)
+
+    tests_feas = is_sol_feas(data, yval, xval)
+
+    return Fterm+Allocterm+Congterm, Fterm, Allocterm, Congterm, yval, xval, status, lb_iter, ub_iter, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, [n_outer_cuts, size(ρ_h)[3]]
 end
 
-function benders_mp2(m)
-    optimize!(m)
-    end_stat = termination_status(m)
-    yval = value.(m[:y])
-    αval = value.(m[:α])
-        
-    if end_stat == MOI.DUAL_INFEASIBLE || end_stat == MOI.INFEASIBLE
-        return end_stat, 10e8, yval, αval
-    elseif end_stat == MOI.OPTIMAL
-        return end_stat, objective_value(m), yval, αval
-    else
-        return end_stat, 10e8 , [], []
-    end       
-end
+function benders_iter(mp, sp_m, types, ρ_h, M, data, params, status, solver, lb, ub, lb_iter, ub_iter, tol, n_outer_cuts, agg=[], μ=0, int_y=[], w_fc=0, τ=10e-5, n_bounds=5, max_iter=10e5, dualsMW=[])
 
-function ini_lp_benders2(data, params, status)
     I = 1:data.I
     J = 1:data.J
     λ = data.a
     C = data.C
     F = data.F
     Q = data.Q
+    cv = data.cv
+    D = data.D    
     K = 1:data.k
-    T = 1:data.t
+    T = 1:data.t    
+
+    # Parameters for the different acceleration techniques
+    # Magnanti-Wang & Papadakos
+    first_it_MW = true
+    interior_y = gen_y(data, repeat([data.k], data.J))
+    τ_MW = 0.5
+    τ_PK = 0.5
+    w0 = 1
     
-    maxtime = max(1, params.max_time - elapsed(status))
+    # Convergence test
+    last_bounds = zeros(n_bounds)
+    conv = false
+    lb_mp, ub_mp = lb, ub
+    # Variables
+    yvals_mp, αvals_mp = [], []
+    xval = Array{Float64}(undef, data.I, data.J, data.t)
+    ρval = Array{Float64}(undef, data.J, data.t)    
+    Rval = Array{Float64}(undef, data.J, data.t)    
+    wval = Array{Float64}(undef, data.J, data.k, data.t)
+    zval = Array{Float64}(undef, data.J, data.k, data.t)
 
-    # Linear relaxation of the master problem
-    lp = Model(optimizer_with_attributes(Gurobi.Optimizer,
-                                    "OutputFlag" => 0,
-                                    "Threads" => 1,
-                                    "MIPGap" => 1e-5,
-                                    "TimeLimit" => maxtime + 1,
-                                    "Presolve" => 0,
-                                    )
-                                    )
-    # lp = Model(optimizer_with_attributes(CPLEX.Optimizer,
-    #                                 "CPXPARAM_ScreenOutput" => 0,
-    #                                 "CPXPARAM_Threads" => 1,
-    #                                 "CPXPARAM_MIP_Tolerances_MIPGap" => 1e-5,
-    #                                 "CPXPARAM_TimeLimit" => maxtime + 1,
-    #                                 "CPXPARAM_Preprocessing_Presolve" => 0,
-    #                                 )
-    #                                 )
-                                    
+    iter_rel = 0
+    cuts_rel = 0
+    update_ρ = false
 
+    # Solver_ENV = Gurobi.Env() # TESTING
+    # solver="gurobi"
     
-    @variable(lp, 0 <= y[J,K] <= 1)
-    @variable(lp, α[T] >= 0)
+    # Solve the problem using Benders iteratively
+    while !conv && iter_rel < max_iter
+        status.nIter += 1
+        iter_rel += 1
 
-    @expression(lp, of_lp, sum(F[j,k]*y[j,k] for j in J for k in K))
-    @expression(lp, α_lp, sum(α[t] for t in T))
-
-    @objective(lp, Min, of_lp + α_lp)
-
-    # At most one capacity level can be selected per facility
-    @constraint(lp, [j in J], sum(y[j,k] for k in K) <= 1, base_name = "c_lp_1")
-
-    ## Valid inequalities
-    # The capacity must be enough to cover all the demand in each period
-    @constraint(lp, [t in T], sum(Q[j,k]*y[j,k] for j in J for k in K) >= sum(λ[:,t]), base_name="c_lp_2")
-
-    # Since we are allocating all the demand, the variable costs have to be greatter than or equal to
-    # the cost of allocating each node to the least expensive facility (closest one)
-    @constraint(lp, [t in T], α[t] >= floor(sum([minimum(C[i,:,t]) for i in I])), base_name="c_lp_3")
-
-    # @constraint(lp, mp_α_ub, sum(α[t] for t in T) <= sum(data.F)+sum(data.C)+data.D*sum(data.a))
-    # @constraint(lp, mp_ub, of_lp + α_lp <= sum(data.F)+sum(data.C)+data.D*sum(data.a))
-
-    return lp
-end
-
-function separate_cuts2(m, yvals, αvals, primals, ρ_h, μ, types, data, status, first_it_MW=false, int_y=[], w_fc=0)
-    xvals = Array{Float64}(undef, data.I, data.J, data.t)
-    ρvals = Array{Float64}(undef, data.J, data.t)    
-    Rvals = Array{Float64}(undef, data.J, data.t)    
-    wvals = Array{Float64}(undef, data.J, data.k, data.t)
-    zvals = Array{Float64}(undef, data.J, data.k, data.t)
-    
-    I = 1:data.I
-    J = 1:data.J
-    Q = data.Q
-    K = 1:data.k
-    T = 1:data.t
-    
-    ρ_k = Array{Float64}(undef,data.J,data.t)                    
-    M = calc_big_M(data, ρ_h) 
-
-    cost_sp = 0
-    update_bounds = true
-
-    for t in T
-        ##### Classical Benders ######
-        # Just one model
-        primal_sp = primals[t]
-        primal_sp = update_primal(primal_sp, data, yvals, M, t, μ, ρ_h)
-        
-        sp_stat, sp_xval, sp_ρval, sp_Rval, sp_wval, sp_zval, sp_val, Cterm, Congterm, π1, π2, π4, π6, π8, π10, π11, π12 = benders_sp_primal(primal_sp, data, ρ_h, t)
-        cost_sp += sp_val
-
-        xvals[:,:,t] = sp_xval
-        ρvals[:,t] = sp_ρval
-        Rvals[:,t] = sp_Rval
-        wvals[:,:,t] = sp_wval
-        zvals[:,:,t] = sp_zval
-        
-
-        H = 1:size(ρ_h[:,t,:],2)
-        expr=zero(AffExpr)
-        expr += sum(-π1[j]*Q[j,k]*m[:y][j,k] for j in J for k in K)
-        expr += sum(-π4[j,k]*m[:y][j,k] for j in J for k in K)
-        expr += sum(-π6[j,k]*M[j,t]*m[:y][j,k] for j in J for k in K)
-        
-        expr += sum(π2[i] for i in I)
-        expr += sum(-π8[j,h]*ρ_h[j,t,h]^2 for j in J for h in H)
-        expr += sum(-π10[i,j] for i in I for j in J)
-        expr += sum(-π11[j,k] for j in J for k in K)
-        expr += sum(-π12[j] for j in J)
-        # expr = sum(-π1[j]*Q[j,k]*m[:y][j,k] for j in J for k in K)+
-        # sum(-π4[j,k]*m[:y][j,k] for j in J for k in K)+
-        # sum(-π6[j,k]*M[j,t]*m[:y][j,k] for j in J for k in K)+
-        # sum(π2[i] for i in I)+
-        # sum(-π8[j,h]*ρ_h[j,t,h]^2 for j in J for h in H)+
-        # sum(-π10[i,j] for i in I for j in J)+
-        # sum(-π11[j,k] for j in J for k in K)+
-        # sum(-π12[j] for j in J)
-
-        # Add a feasibility cut
-        if sp_stat == MOI.DUAL_INFEASIBLE || sp_stat == MOI.INFEASIBLE
-            status.nFeasCuts += 1 
-            m[Symbol("feas_$(t)_$(status.nIter)")] =  @constraint(m, 0 >= expr, base_name="feas_$(t)_$(status.nIter)") 
-            println("iter= $(status.nIter) adding Benders feasibility cut for t=$t ######################")   
-            update_bounds = false                            
-        
-        elseif sp_stat == MOI.OPTIMAL
-            # Add an optimality cut
-            if  sp_val  > αvals[t] + 1e-4  
-                # All but Fischetti
-                if !("FC" in types)
-                    status.nOptCuts += 1
-                    m[Symbol("opt_$(t)_$(status.nIter)")] = @constraint(m, m[:α][t] >= expr, base_name="opt_$(t)_$(status.nIter)")
-                    # println("Cut\n")
-                    # println(expr)
-                    println("iter= $(status.nIter) adding Benders optimality cut for t=$t --------------------") 
-                end
-
-                ### Magnanti-Wong ###
-                if "MW" in types # =="MW"
-                    
-                    # ### Magnanti-Wong ###  
-                    if first_it_MW
-                        int_y = 0.5.*int_y .+ 0.5.*yvals
-                    else
-                        int_y = yvals
-                        first_it_MW = true
-                    end            
-                    sp_stat, _sp_val, _π0,  π1, π2, π4, π6, π8, π10, π11, π12 = benders_sp_dual(int_y, data, ρ_h, t, αvals) #, types)
-
-                    expr=zero(AffExpr)
-                    expr += sum(-π1[j]*Q[j,k]*m[:y][j,k] for j in J for k in K)
-                    expr += sum(-π4[j,k]*m[:y][j,k] for j in J for k in K)
-                    expr += sum(-π6[j,k]*M[j,t]*m[:y][j,k] for j in J for k in K)
-                    
-                    expr += sum(π2[i] for i in I)
-                    expr += sum(-π8[j,h]*ρ_h[j,t,h]^2 for j in J for h in H)
-                    expr += sum(-π10[i,j] for i in I for j in J)
-                    expr += sum(-π11[j,k] for j in J for k in K)
-                    expr += sum(-π12[j] for j in J)
-
-                    status.nOptCuts += 1
-                    @constraint(m, m[:α][t] >= expr) 
-                    println("iter= $(status.nIter) adding Magnanti-Wong optimality cut for t=$t --------------------")
-                end                                        
-                
-                ### Fischetti ###
-                if "FC" in types
-                    sp_stat, _sp_val, π0, π1, π2, π4, π6, π8, π10, π11, π12 = benders_sp_dual(yvals, data, ρ_h, t, αvals, w_fc, 1)
-
-                    expr=zero(AffExpr)
-                    expr += sum(-π1[j]*Q[j,k]*m[:y][j,k] for j in J for k in K)
-                    expr += sum(-π4[j,k]*m[:y][j,k] for j in J for k in K)
-                    expr += sum(-π6[j,k]*M[j,t]*m[:y][j,k] for j in J for k in K)
-                    
-                    expr += sum(π2[i] for i in I)
-                    expr += sum(-π8[j,h]*ρ_h[j,t,h]^2 for j in J for h in H)
-                    expr += sum(-π10[i,j] for i in I for j in J)
-                    expr += sum(-π11[j,k] for j in J for k in K)
-                    expr += sum(-π12[j] for j in J)
-
-                    status.nOptCuts += 1
-                    # cons = @build_constraint(π0* m[:α][t] >=  expr)
-                    @constraint(m, π0*m[:α][t] >= expr) 
-                    println("iter= $(status.nIter) adding Fischetti optimality cut for t=$t --------------------")
-                end
+        # For PK, if y is not feasible for all the periods
+        # then use the last interior point, otherwise, update it
+        if "PK" in types
+            if !first_it_MW
+                interior_y =  τ_PK.*interior_y .+ (1-τ_PK).*yvals_mp
             else
-                println("Sol is ok for $t")
+                first_it_MW = false
+            end
+            sp_stats_PK, sp_feas_PK, sp_ofs_PK, sp_duals_PK = solve_benders_sp_dual(sp_m, data, params, status, solver, interior_y, repeat([0], data.t), ρ_h, M, n_outer_cuts, types)        
+            for t in T
+                expr = get_expr(mp, sp_duals_PK[t], data, ρ_h, M, t, types)
+                if sp_stats_PK[t] == MOI.OPTIMAL
+                    status.nOptCuts += 1                
+                    opt_cut = @constraint(mp, mp[:α][t] >= expr) 
+                    mp[Symbol("PK_opt_cut_$(t)_$(status.nIter)")] = opt_cut
+                end
             end
         end
-        ρ_k[:,t] = sp_ρval
-        primals[t] = primal_sp
+
+
+        end_stat_mp, of_mp, yvals_mp, αvals_mp = solve_benders_mp(mp)
+        if of_mp + tol >= ub_mp
+            println("Stop since mp of is > tan ub")
+            break
+        end
+        
+        if end_stat_mp == MOI.INFEASIBLE
+            println("The problem with aggregation $agg is infeasible ****")
+            conv = true
+            break
+        end
+
+        ## Solve SPs
+        if "SH" in types || "Rel" in types
+            sp_vars, sp_stats, sp_feas, sp_ofs, sp_duals = solve_benders_sp_primal(sp_m, data, params, status, solver, yvals_mp, ρ_h, M, n_outer_cuts, μ, update_ρ, agg)
+        elseif "B" in types || "PK" in types || "FC" in types
+            sp_stats, sp_feas, sp_ofs, sp_duals = solve_benders_sp_dual(sp_m, data, params, status, solver, yvals_mp, αvals_mp, ρ_h, M, n_outer_cuts, types, update_ρ, w_fc, w0)
+        elseif "MW" in types
+            # This is the dual that provides feas cuts
+            sp_stats, sp_feas, sp_ofs, sp_duals = solve_benders_sp_dual(sp_m, data, params, status, solver, yvals_mp, αvals_mp, ρ_h, M, n_outer_cuts, ["B"], update_ρ, w_fc, w0)
+        # elseif "Rel" in types
+        #     sp_vars, sp_stats, sp_feas, sp_ofs, sp_duals = solve_benders_sp_primal(sp_m, data, params, status, solver, yvals_mp, ρ_h, M, n_outer_cuts, μ, false, agg)
+        end
+
+        # sp_vars, sp_stats, sp_feas, sp_ofs, sp_duals = solve_benders_sp_primal(prims, data, params, status, solver, yvals_mp, ρ_h, M, n_outer_cuts, μ, false, agg)              
+        
+        # println("αvals_mp = $(sum(αvals_mp))")
+        # println("sum of sp =$(sum(sp_ofs))")
+        if sum(αvals_mp) + tol >= sum(sp_ofs)
+            conv = true
+            break
+        end
+
+        lb_mp = of_mp
+        last_bounds = append!(last_bounds, lb_mp)[2:end]
+        conv = last_bounds[end]-last_bounds[begin] <= τ*last_bounds[end] ? true : false
+
+        cuts_types = "all"
+        # If the lb is greatter than the ub, then only add feasibility cuts
+        # if lb_mp > ub + tol
+        #     cuts_types = "feas"
+        # end
+
+        if "Rel" in types
+            _cuts_gen, cuts_rel_iter, _cuts_sep_other = separate_cuts(mp, αvals_mp, ρ_h, M, data, status, ["B"], false, cuts_types, sp_stats, sp_feas, sp_ofs, sp_duals, [], agg)
+            cuts_rel += cuts_rel_iter
+        else
+            _cuts_gen, _cuts_rel, cuts_sep_other = separate_cuts(mp, αvals_mp, ρ_h, M, data, status, types, false, cuts_types, sp_stats, sp_feas, sp_ofs, sp_duals)
+        end
+
+        # For MW, use the y values for the first iteration,
+        # then calculate a new point between feasible solutions
+        # If y is not feasible, then use the same last feasible solution
+        if "MW" in types && !(false in sp_feas)
+            if !first_it_MW
+                interior_y = τ_MW.*interior_y .+ (1-τ_MW).*yvals_mp
+            elseif first_it_MW
+                if !(false in sp_feas)
+                    interior_y = yvals_mp
+                else
+                    interior_y = gen_y(data, repeat([data.k], data.J))
+                end
+                first_it_MW = false
+            end
+            sp_stats_MW, sp_feas_MW, sp_ofs_MW, sp_duals_MW = solve_benders_sp_dual(dualsMW, data, params, status, solver, interior_y, αvals_mp, ρ_h, M, n_outer_cuts, types, update_ρ, w_fc, w0, yvals_mp, sp_ofs)
+            _cuts_gen, _cuts_rel, cuts_sep_other = separate_cuts(mp, αvals_mp, ρ_h, M, data, status, ["B"], false, cuts_types, sp_stats_MW, sp_feas_MW, sp_ofs_MW, sp_duals_MW)
+        end
+
+        update_ρ = false
+        update_M = false
+
+        if !("Rel" in types)
+            ρvals = Array{Float64}(undef, data.J, data.t)    
+            Rvals = Array{Float64}(undef, data.J, data.t)
+            for t in T
+                if "B" in types || "PK" in types || "FC" in types
+                    ρvals[:,t] = -dual.(sp_m[t][:cρ_sp_d])
+                    Rvals[:,t] = -dual.(sp_m[t][:cR_sp_d])
+                elseif "MW" in types
+                    ρvals[:,t] = -dual.(sp_m[t][:cρ_sp_d]) #dualsMW
+                    Rvals[:,t] = -dual.(sp_m[t][:cR_sp_d]) 
+                elseif "SH" in types
+                    ρvals[:,t] = sp_vars[t]["ρ"].data
+                    Rvals[:,t] = sp_vars[t]["R"].data
+                end
+            end
+
+            # Thigten the outer approximation only if the sp are all feasible
+
+            if  !(false in sp_feas) # && 2 ==3
+                # for j in J, t in T
+                #     # Update if violation
+                #     if Rvals[j,t] + tol < ρvals[j,t]/(1-ρvals[j,t])
+                for I in findall(==(1), Rvals .< (ρvals ./ (1 .- ρvals)))
+                    update_ρ = true
+                    j, t = I[1], I[2]
+                    if ρvals[j,t] > maximum(ρ_h[j,t,:]) && !update_M
+                        update_M = true
+                    end
+                    # end
+                    # Avoid having Nan in the M calc. This actually happens
+                    # if ρvals > 1 - 10e-18, but we decrease the max to limit the
+                    # max value of M
+                    if ρvals[j,t] > 1 - 10e-4
+                        ρvals[j,t] = 1 - 10e-4
+                    end
+
+                end        
+                # println("We are uptading p =$update_ρ")
+                if update_ρ
+                    ρ_h = cat(ρ_h, ρvals, dims=3)
+                    if update_M    
+                        M = calc_big_M(data, ρ_h)
+                    end
+                end
+            end
+        end
+        
+        ub_mp_temp = dot(data.F, yvals_mp) + sum(sp_ofs)
+        
+        # Update the UB
+        if ub_mp_temp < ub_mp
+            ub_mp =  ub_mp_temp
+            println("LB=$lb_mp iter = $(status.nIter)")      
+            println("UB=$ub_mp iter = $(status.nIter)\n")
+        end
+
+        lb_iter[status.nIter] = lb_mp
+        ub_iter[status.nIter] = ub_mp
+
+        if "SH" in types || "Rel" in types
+            for t in T
+                vars = sp_vars[t]
+                xval[:,:,t] = vars["x"]
+                ρval[:,t] = vars["ρ"]
+                Rval[:,t] = vars["R"]
+                wval[:,:,t] = vars["w"]
+                zval[:,:,t] = vars["z"]
+            end
+        else                
+            for t in T
+                xval[:,:,t] = -dual.(sp_m[t][:cx_sp_d])
+                ρval[:,t] = -dual.(sp_m[t][:cρ_sp_d])
+                Rval[:,t] = -dual.(sp_m[t][:cR_sp_d])
+                wval[:,:,t] = -dual.(sp_m[t][:cw_sp_d])
+                zval[:,:,t] = -dual.(sp_m[t][:cz_sp_d])
+            end
+        end  
     end
-    ρ_h = cat(ρ_h, ρ_k, dims=3)
-    return m, primals, ρ_h, cost_sp, update_bounds, xvals, ρvals, Rvals, wvals, zvals, first_it_MW, int_y
+    
+    return lb_mp, ub_mp, lb_iter, ub_iter, iter_rel, cuts_rel, yvals_mp, αvals_mp, xval, ρval, Rval, wval, zval, ρ_h #, yint, ub_yint
 end

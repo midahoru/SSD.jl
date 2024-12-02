@@ -163,7 +163,10 @@ function ini_model_iter_cuts(data, params, status, ρ_h)
     return m
 end
 
-function solve_model_iter_cuts(m, status)
+function solve_model_iter_cuts(m, params, status)
+
+    maxtime = max(1, params.max_time - elapsed(status))
+    set_attribute(m, "TimeLimit", maxtime)
 
     optimize!(m)
     

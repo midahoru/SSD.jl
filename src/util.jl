@@ -2,7 +2,9 @@
 
 function gen_caps(data, params)
     # Define the different capacity levels
-    cap_levels = [0.5, 0.75, 1, 1.25, 1.5]
+    cap_levels = round.(collect(range(0.5,length=data.k,1.5)), digits=params.round_digits) #[0.5, 0.75, 1, 1.25, 1.5]
+    # cap_levels[ceil(data.k/2)]=1
+    # println(cap_levels)
     # Gets the max demand per time period
     max_dem_t = maximum(sum.(eachcol(data.a)))
     Q_j3 = zeros(Float64, data.J)
@@ -15,7 +17,8 @@ end
 
 function gen_costs(data, params)
     # Define the different cost levels
-    cost_levels = [0.60, 0.85, 1, 1.15, 1.35]
+    cost_levels = [0.60, 0.85, 1, 1.1, 1.15] # [0.60, 0.85, 1, 1.15, 1.35]# round.(collect(range(0.5,length=data.k,1.5)), digits=2) #
+    # cost_levels[ceil(data.k/2)]=1
 
     delta_x  = maximum(maximum.([data.Jcoords[1,:], data.Icoords[1,:]]))-minimum(minimum.([data.Jcoords[1,:], data.Icoords[1,:]]))
     delta_y = maximum(maximum.([data.Jcoords[2,:], data.Icoords[2,:]]))-minimum(minimum.([data.Jcoords[2,:], data.Icoords[2,:]]))
@@ -47,38 +50,50 @@ function solve_ssd(instance, solve_method, n_outer_cuts=32)
         return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas
 
     elseif solve_method == ["iter_cuts"]
-        lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x, lb_ls, tests_feas, n_tan  = cuts_priori(data, params, status, n_outer_cuts)
-        return round(ub, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, tests_feas, n_tan 
+        lb, ub, of_term1_lb, of_term2_lb, of_term3_lb, of_term1_ub, of_term2_ub, of_term3_ub, y, x, lb_ls, tests_feas, n_vars, n_cons, n_nodes, n_tan  = cuts_priori(data, params, status, n_outer_cuts)
+        return round(ub, digits=params.round_digits), round(of_term1_ub, digits=params.round_digits), round(of_term2_ub, digits=params.round_digits), round(of_term3_ub, digits=params.round_digits), convert_y_to_print(y.data, data), x.data, status, [],[],[],[], n_vars, n_cons, n_nodes, tests_feas, n_tan 
     
     elseif solve_method == ["lazy_cuts"]
-        of, of_term1, of_term2, of_term3, y, x, tests_feas, n_tan = model_lazy_cuts(data, params, status, n_outer_cuts)
-        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits),convert_y_to_print(y.data, data), x.data, status, tests_feas, n_tan # y, x.data, status, tests_feas #
-
+        of, of_term1, of_term2, of_term3, y, x, tests_feas, n_vars, n_cons, n_nodes, n_tan = model_lazy_cuts(data, params, status, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits),convert_y_to_print(y.data, data), x.data, status, [],[],[],[], n_vars, n_cons, n_nodes, tests_feas, n_tan
+    
     elseif solve_method == ["K"] || ["J"] == solve_method || ["KJ"] == solve_method || ["LP"] == solve_method || ["Clust"] == solve_method
         relax_iters, relax_cuts, relax_lb = model_benders(data, params, status, solve_method)
         return relax_iters, relax_cuts, relax_lb
-    else
-        methods = []
-        if "benders" in solve_method
-            push!(methods, "B")
-        end
-        if "bendersMW" in solve_method
-            push!(methods, "MW")
-        end
-        if "bendersPK" in solve_method
-            push!(methods, "PK")
-        end
-        if "bendersSH" in solve_method
-            push!(methods, "SH")
-        end
-        if "bendersFC" in solve_method
-            push!(methods, "FC")
-        end
-        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, ["Clust"], methods, n_outer_cuts)
+    
+    elseif solve_method == ["benders_iter"]
+        rels = ["Clust"]
+
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders_iter(data, params, status, rels, accel, n_outer_cuts) #data, params, status, relaxations=["Clust"], types=["B"], n_outer_cuts=32
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y.data, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
+
+
+    elseif solve_method == ["benders_lazyB"]
+        rels = ["LP"] #["Clust"] LP
+        accel = ["B"]
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, rels, accel, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
+    elseif solve_method == ["benders_lazyBp"]
+        rels = ["LP"] #["Clust"] LP
+        accel = ["Bp"]
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, rels, accel, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
+    elseif solve_method == ["benders_lazySH"]
+        rels = ["LP"] #["Clust"]
+        accel = ["SH"]
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, rels, accel, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
+    elseif solve_method == ["benders_lazyMW"]
+        rels = ["LP"] #["Clust"]
+        accel = ["MW"]
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, rels, accel, n_outer_cuts)
+        return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
+    elseif solve_method == ["benders_lazyPK"]
+        rels = ["LP"] #["Clust"]
+        accel = ["PK"]
+        of, Fterm, Allocterm, Congterm, y, x, status, lb, ub, tests_feas, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, n_tan  = model_benders(data, params, status, rels, accel, n_outer_cuts)
         return round(of, digits=params.round_digits), round(Fterm, digits=params.round_digits), round(Allocterm, digits=params.round_digits), round(Congterm, digits=params.round_digits), convert_y_to_print(y, data), x, status, lb, ub, relax_iters, relax_cuts, n_vars, n_cons, n_nodes, tests_feas, n_tan
     
-        
-
     # elseif solve_method == "benders"
     #     of, of2, of_term1, of_term2, of_term3, y, x, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters  = model_benders(data, params, status)
     #     return round(of, digits=params.round_digits), round(of2, digits=params.round_digits), round(of_term1, digits=params.round_digits), round(of_term2, digits=params.round_digits), round(of_term3, digits=params.round_digits), convert_y_to_print(y, data), x, status, nodes, f_cut, opt_cut, lb, ub, test_cap, test_cap_sel, test_alloc, relax_iters
@@ -127,18 +142,40 @@ function ini_ρ_h(data, n=10)
     T = 1:data.t
 
     if n > 0
-        ini_ρ_h = collect(range(0.1,length=n,0.97))
+        i_ρ_h = round.(collect(range(0.1,length=n,0.995)), digits=3)
     else
-        ini_ρ_h = [0]
+        i_ρ_h = [0]
     end
-    H = 1:length(ini_ρ_h)
-    ρ_h = Array{Float64}(undef,data.J,data.t,length(ini_ρ_h))
+    H = 1:length(i_ρ_h)
+    ρ_h = Array{Float64}(undef,data.J,data.t,length(i_ρ_h))
 
     for j in J, t in T, h in H
-        ρ_h[j, t, h]= ini_ρ_h[h]
+        ρ_h[j, t, h]= i_ρ_h[h]
     end
     return ρ_h
 end
+
+# function ini_ρ_h(data, n=10)
+#     J = 1:data.J 
+#     T = 1:data.t
+
+#     if n > 0
+#         i_ρ_h = round.(collect(range(0.1,length=n,0.995)), digits=3)
+#     else
+#         i_ρ_h = [0]
+#     end
+#     H = 1:length(i_ρ_h)
+#     ρ_h = []
+
+#     for t in T
+#         ρ_h_t = []
+#         for j in J
+#             push!(ρ_h_t, i_ρ_h)
+#         end
+#         push!(ρ_h, ρ_h_t)
+#     end
+#     return ρ_h
+# end
 
 function calc_ub(x, y, data)
     I = 1:data.I
@@ -215,27 +252,23 @@ function calc_new_w_z(x, y, R, ρ, data)
 end
 
 function calc_big_M(data, ρ_h)
-    # J = 1:data.J
-    # T = 1:data.t
-    # H = 1:size(ρ_h,3)
-    max_ρ_h = maximum(ρ_h, dims=3)
+    max_ρ_h = maximum(ρ_h, dims=3)[:,:,1] 
     M =  (1 ./ (1 .- max_ρ_h).^2) .- (max_ρ_h.^2 ./ (1 .- max_ρ_h).^2)
-
-    # M = zeros(data.J, data.t)
-    # for j in J, t in T
-    #     # max_in_1 = 0
-    #     # for h in H
-    #     #     value_in_1 = 1/(1-ρ_h[j,t,h])^2 -ρ_h[j,t,h]^2/(1-ρ_h[j,t,h])^2
-    #     #     if value_in_1 > max_in_1
-    #     #         max_in_1 = value_in_1
-    #     #     end
-    #     # end
-    #     # M[j,t]=max_in_1
-    #     max_ρ_h = maximum(ρ_h[j,t,:]) #max_in_1
-    #     M[j,t]= 1/(1-max_ρ_h)^2 -max_ρ_h^2/(1-max_ρ_h)^2
-    # end
-    return M
+    return Int64.(ceil.(M))
 end
+
+# function calc_big_M(data, ρ_h)
+#     J = 1:data.J 
+#     T = 1:data.t
+#     M = Array{Int64}(undef,data.J,data.t)
+
+#     for t in T, j in J
+#         max_ρ_tj = maximum(ρ_h[t][j])
+#         m = (1/(1-max_ρ_tj)^2) - (max_ρ_tj/(1-max_ρ_tj)^2)
+#         M[j,t] = Int64(ceil(m))
+#     end
+#     return M 
+# end
 
 function calc_big_M_2(data, ρ_h)
     J = 1:data.J
